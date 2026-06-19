@@ -1,736 +1,942 @@
-# LingoForge Claude Code 自动执行计划
+# LingoForge DS/Claude Code 执行计划 03
 
-## 使用范围
+本计划扩大 DS/Claude Code 委派范围，包含可机械实现的后端业务代码。公共契约以 `docs/IMPLEMENTATION_CONTRACTS.md` 为准；若本计划与该契约冲突，以契约文档为准。
 
-本文档列出当前规格与代码状态下，可以安全交给 Claude Code 自动完成的全部简单任务。它不是 Codex 核心实现计划，也不包含前端、Agent Runtime、ContextBuilder、记忆核心语义、Context Expansion、Prompt、教学 Skill、Workflow 总编排或公共接口设计。
+执行总规则：
 
-Claude Code 执行本文档时必须遵守：
+- 每个任务必须先写 RED 测试，再做 GREEN 实现。
+- 每个任务尽量只修改 1 到 5 个文件。
+- 每个任务必须能独立提交、独立回滚。
+- 不得修改数据库 Schema、Vue 前端、Agent Runtime 主循环、Runtime 身份权限模型、Provider 公共契约、ToolExecutor 公共契约、ContextBuilder 核心语义、Context Expansion、Memory 核心状态机、`analyze_learning_history` 算法设计、Workflow 总编排、Prompt / Skill 语义、隔离测试防泄漏设计。
+- 不得引入 LangChain、多 Agent、向量数据库、消息队列、微服务或新的重型依赖。
+- 所有说明、测试名、提交信息使用中文；代码标识符可用英文。
 
-- 全部说明、汇报、测试报告和 Git 提交信息使用中文。
-- 不修改 `AGENTS.md`、`docs/SPEC.md`、`docs/AGENT_ARCHITECTURE.md` 中定义的架构语义。
-- 不修改前端目录。
-- 不修改数据库 Schema。
-- 不新增 Prompt，不修改 Skill 语义。
-- 不实现 Agent Runtime、ContextBuilder、Context Expansion、DecisionValidator 或 Workflow 总编排。
-- 每个任务按 TDD 执行，先写或补测试，再实现最小代码。
-- 每个任务完成后运行任务指定测试，必要时运行 `python -m pytest backend\tests`。
-- 每个任务应独立提交，提交信息使用本文建议的中文提交信息。
+## 阶段一：冻结模型与确定性评分
 
-## 阶段一：后端基础工具
+### 任务 1：新增英语分析请求与响应模型
 
-### 任务 1：新增 SQLite JSON 字段工具
+目标：新增文本分析 API 使用的 Pydantic 模型，字段与 `docs/IMPLEMENTATION_CONTRACTS.md` 第 2 节一致。
 
-**任务目标**
+依赖：`docs/IMPLEMENTATION_CONTRACTS.md`。
 
-为后续 repository 和确定性服务提供最小 JSON 字段读写工具，避免各模块重复手写 `json.dumps` / `json.loads`。
+允许修改的文件：
 
-**已确定的输入**
+- `backend/tests/test_learning_models.py`
 
-- Python 基础类型：`dict`、`list`、`str`、`int`、`float`、`bool`、`None`。
-- SQLite TEXT 字段中的 JSON 字符串。
-- 无效 JSON 字符串。
+允许新增的文件：
 
-**已确定的输出**
+- `backend/app/api/learning_models.py`
 
-- `to_json_text(value) -> str`：输出稳定 JSON 文本，中文不转义。
-- `from_json_text(text, default)`：解析成功返回对象；空值或无效 JSON 返回 `default`。
+禁止修改范围：
 
-**允许修改的文件范围**
+- 数据库 Schema
+- Agent Runtime、ToolExecutor、ContextBuilder、Provider 契约
+- Prompt / Skill / Workflow
+- Vue 前端
 
-- `backend/app/storage/json_fields.py`
-- `backend/app/storage/__init__.py`
-- `backend/tests/test_json_fields.py`
+已冻结的接口签名：
 
-**禁止修改的范围**
+```python
+class TextAnalysisRequest(BaseModel): ...
+class KeywordAnalysis(BaseModel): ...
+class ExerciseOption(BaseModel): ...
+class ExerciseQuestion(BaseModel): ...
+class TextAnalysisResponse(BaseModel): ...
+```
 
-- 不修改数据库 Schema。
-- 不修改现有业务逻辑。
-- 不新增第三方依赖。
-- 不修改 LLM、Agent、Workflow、Prompt、Skill 或前端。
+验收标准：
 
-**验收标准**
+- `raw_text` 不能为空。
+- `target_abilities` 只能使用 `Ability` 常量中的值。
+- `max_keywords` 范围为 1 到 12。
+- 请求体 extra 字段被拒绝，包括 `user_id/session_id/permission_scope`。
 
-- JSON 文本稳定可比较。
-- 中文内容保持可读。
-- 无效 JSON 不抛出未处理异常，而是返回默认值。
-- 工具函数无数据库副作用。
+RED 测试：
 
-**测试要求**
+- 非法 ability 返回模型校验失败。
+- 空 `raw_text` 校验失败。
+- 请求体包含 `user_id` 校验失败。
 
-- 先新增 `backend/tests/test_json_fields.py`。
-- 覆盖字典、列表、中文字符串、空值、无效 JSON。
-- 运行：`python -m pytest backend\tests\test_json_fields.py`
+GREEN 实现要求：
 
-**依赖关系**
+- 使用 Pydantic v2 `ConfigDict(extra="forbid")`。
+- 不写任何业务逻辑。
 
-- 无。
+完整回归命令：
 
-**建议的中文 Git 提交信息**
+- `python -m pytest backend\tests\test_learning_models.py`
+- `python -m pytest backend\tests`
 
-`新增 SQLite JSON 字段工具`
+推荐中文提交信息：`新增英语分析接口模型`
 
-### 任务 2：新增后端枚举常量与基础校验
+### 任务 2：新增训练任务与提交模型
 
-**任务目标**
+目标：新增训练任务、练习题、训练提交和训练结果响应模型，字段与契约第 3、4、5 节一致。
 
-集中定义当前 Schema 和规格已经明确的枚举常量，供 repository 和普通校验复用。
+依赖：任务 1。
 
-**已确定的输入**
+允许修改的文件：
 
-- 当前文档已确定的能力维度、Workflow Stage、session 状态、调用类型、调用状态、画像建议状态、记忆状态。
+- `backend/tests/test_training_models.py`
 
-**已确定的输出**
+允许新增的文件：
 
-- 常量集合或轻量枚举。
-- `is_valid_ability(value)`、`is_valid_workflow_stage(value)` 等简单校验函数。
+- `backend/app/api/training_models.py`
 
-**允许修改的文件范围**
+禁止修改范围：
 
-- `backend/app/constants.py`
-- `backend/tests/test_constants.py`
+- 数据库 Schema
+- Repository 实现
+- Agent Runtime、ToolExecutor、ContextBuilder
+- Prompt / Skill / Workflow
+- Vue 前端
 
-**禁止修改的范围**
+已冻结的接口签名：
 
-- 不修改 DeepSeek 模型配置。
-- 不修改数据库 Schema。
-- 不设计公共 API。
-- 不修改 Prompt、Skill 语义、Agent Runtime、ContextBuilder 或 Workflow 总编排。
+```python
+class TrainingOption(BaseModel): ...
+class TrainingQuestion(BaseModel): ...
+class TrainingTaskContent(BaseModel): ...
+class TrainingAnswer(BaseModel): ...
+class TrainingSubmitRequest(BaseModel): ...
+class QuestionScoreResult(BaseModel): ...
+class TrainingScore(BaseModel): ...
+class TrainingSubmitResponse(BaseModel): ...
+class TrainingTaskSummary(BaseModel): ...
+class TrainingResultResponse(BaseModel): ...
+```
 
-**验收标准**
+验收标准：
 
-- 覆盖 4 类能力维度。
-- 覆盖当前 Schema 已使用的主要状态值。
-- `NEEDS_REVIEW` 仅作为合法记忆状态被包含。
-- 画像建议状态只能采用当前 Schema 或规格已经明确的值，不得自行扩展。
-- 非法值校验返回 false，不抛出未处理异常。
+- MVP 仅允许 `question_type="MULTIPLE_CHOICE"`。
+- `answers` 至少 1 项。
+- `time_spent_seconds` 非负。
+- 请求体 extra 字段被拒绝，包括身份字段。
 
-**测试要求**
+RED 测试：
 
-- 先新增 `backend/tests/test_constants.py`。
-- 覆盖合法与非法能力、阶段和状态。
-- 运行：`python -m pytest backend\tests\test_constants.py`
+- 非 MULTIPLE_CHOICE 题型校验失败。
+- 空 answers 校验失败。
+- `time_spent_seconds=-1` 校验失败。
 
-**依赖关系**
+GREEN 实现要求：
 
-- 无。
+- 模型只做结构校验，不访问数据库。
+- 保持 snake_case 字段风格。
 
-**建议的中文 Git 提交信息**
+完整回归命令：
 
-`新增后端枚举常量和校验`
+- `python -m pytest backend\tests\test_training_models.py`
+- `python -m pytest backend\tests`
 
-### 任务 3：新增 repository 基础数据库辅助
+推荐中文提交信息：`新增训练任务与提交模型`
 
-**任务目标**
+### 任务 3：实现确定性训练评分器
 
-为后续 repository 提供薄封装，减少重复 SQL 样板，但不改变数据库连接策略。
+目标：实现不依赖 LLM 和数据库的客观题评分器。
 
-**已确定的输入**
+依赖：任务 2。
 
-- 当前 `backend/app/database.py` 的 `connect` 函数。
-- SQLite row。
-- SQL 参数。
+允许修改的文件：
 
-**已确定的输出**
+- `backend/tests/test_training_scorer.py`
 
-- `fetch_one`、`fetch_all`、`execute` 或等价小函数。
-- row 转 dict 的辅助函数。
-- 不持有全局连接，不引入 ORM。
+允许新增的文件：
 
-**允许修改的文件范围**
+- `backend/app/services/training_scorer.py`
 
-- `backend/app/repositories/base.py`
-- `backend/app/repositories/__init__.py`
-- `backend/tests/test_repository_base.py`
+禁止修改范围：
 
-**禁止修改的范围**
+- 数据库 Schema
+- Repository
+- API 路由
+- Agent Runtime、ToolExecutor、ContextBuilder
+- Prompt / Skill / Workflow
 
-- 不修改 `backend/app/database.py` 的连接语义。
-- 不引入 ORM。
-- 不修改数据库 Schema。
-- 不修改业务服务、Agent、Workflow 或前端。
+已冻结的接口签名：
 
-**验收标准**
+```python
+def score_training_submission(
+    task_content: dict,
+    answers: list[dict],
+    *,
+    used_hints: list[str] | None = None,
+) -> dict:
+    ...
+```
 
-- 支持传入临时数据库路径。
-- 查询不存在记录时返回 `None` 或空列表。
-- 写入后提交生效。
-- 外键约束仍由连接层启用。
+验收标准：
 
-**测试要求**
+- 按 `question_id` 匹配答案，不按数组顺序推断。
+- 正确计算 `total/correct/accuracy/passed/question_results/error_types/used_hints`。
+- 未答题记错，错误类型来自 `error_type_on_wrong` 或 `UNKNOWN_ERROR`。
+- 多余答案不影响已有题目正确性，并在输出中可审计。
 
-- 先新增 `backend/tests/test_repository_base.py`。
-- 使用临时数据库路径，不污染开发数据库。
-- 运行：`python -m pytest backend\tests\test_repository_base.py`
+RED 测试：
 
-**依赖关系**
+- 全对、部分错误、未答题、多余答案、乱序答案各一例。
 
-- 任务 1。
+GREEN 实现要求：
 
-**建议的中文 Git 提交信息**
+- 纯函数实现。
+- 不调用外部服务。
+- 不记录日志。
 
-`新增 repository 基础数据库辅助`
+完整回归命令：
 
-## 阶段二：当前 Schema 的普通 Repository
+- `python -m pytest backend\tests\test_training_scorer.py`
+- `python -m pytest backend\tests`
 
-### 任务 4：实现用户、目标和画像 Repository
+推荐中文提交信息：`实现确定性训练评分器`
 
-**任务目标**
+## 阶段二：薄业务 Service
 
-为 `users`、`user_goals`、`profile_snapshots`、`profile_update_suggestions` 提供普通 CRUD 和简单查询。
+### 任务 4：实现文本分析确定性服务
 
-**已确定的输入**
+目标：实现 `MOCK_DETERMINISTIC` 文本分析服务，用于 API 在没有完整 Agent 教学 Skill 前返回稳定结构化分析结果。
 
-- `display_name`
-- 用户目标字段
-- 画像 JSON
-- 画像建议字段
-- 临时数据库路径
+依赖：任务 1、任务 2。
 
-**已确定的输出**
+允许修改的文件：
 
-- 创建用户。
-- 获取用户。
-- 保存用户目标。
-- 获取最新用户目标。
-- 保存画像快照。
-- 获取最新画像快照。
-- 写入画像更新建议。
-- 按用户读取画像建议列表。
+- `backend/tests/test_learning_analysis_service.py`
 
-**允许修改的文件范围**
+允许新增的文件：
 
-- `backend/app/repositories/users.py`
-- `backend/tests/test_user_repository.py`
+- `backend/app/services/learning_analysis.py`
 
-**禁止修改的范围**
+禁止修改范围：
 
-- 不修改 Schema。
-- 不修改画像更新校验语义。
-- 不实现 `submit_profile_update_suggestion` 工具。
-- 不直接应用画像建议。
-- 不修改 Agent Runtime、Memory Service、Workflow 或前端。
+- Agent Runtime、Prompt、Skill、Provider
+- 数据库 Schema
+- Vue 前端
 
-**验收标准**
+已冻结的接口签名：
 
-- 所有写入均能回读。
-- JSON 字段以对象形式传入和返回。
-- 最新画像按 `created_at` 和自增 ID 稳定选择。
-- 不存在用户时返回空结果，不伪造数据。
+```python
+def analyze_english_text(request: TextAnalysisRequest) -> TextAnalysisResponse:
+    ...
+```
 
-**测试要求**
+验收标准：
 
-- 先新增 `backend/tests/test_user_repository.py`。
-- 使用临时数据库。
-- 覆盖创建、读取、最新画像、画像建议写入。
-- 运行：`python -m pytest backend\tests\test_user_repository.py`
+- 返回原始英文文本。
+- 返回不超过 `max_keywords` 个关键词。
+- 每个关键词包含 `text/meaning_zh/usage_note/ability/selection_reason`。
+- `generate_exercise=True` 时返回一题 MULTIPLE_CHOICE。
+- `agent_feedback` 为稳定中文模板，不声称来自真实 Agent 思维。
 
-**依赖关系**
+RED 测试：
 
-- 任务 1。
-- 任务 3。
+- 常规英文段落能返回关键词和练习题。
+- `generate_exercise=False` 时 exercise 为 null。
+- 文本过短时返回 warnings。
 
-**建议的中文 Git 提交信息**
+GREEN 实现要求：
 
-`新增用户目标和画像 repository`
+- 使用确定性规则抽取英文 token，过滤过短 token 和重复 token。
+- 中文释义可以使用小型内置词典加“待学习词汇”兜底。
+- 不调用 LLM。
 
-### 任务 5：实现词汇、Skill 元数据和候选词 Repository
+完整回归命令：
 
-**任务目标**
+- `python -m pytest backend\tests\test_learning_analysis_service.py`
+- `python -m pytest backend\tests`
 
-为 `vocabulary_items`、`skill_versions`、`candidate_vocabulary_events` 提供普通写入与查询。
+推荐中文提交信息：`实现确定性英语分析服务`
 
-**已确定的输入**
+### 任务 5：实现训练任务薄封装服务
 
-- 词汇文本、中文释义、标签、来源类型。
-- Skill 元数据 JSON 字段。
-- 候选词事件字段。
+目标：基于现有 `generated_tasks` 表实现训练任务创建和归属校验薄封装。
 
-**已确定的输出**
+依赖：任务 2、任务 4。
 
-- 创建词汇项。
-- 按 ID 获取词汇项。
-- 按标签或来源类型列出词汇项。
-- 创建 Skill 版本元数据。
-- 按 `skill_id` 和 `version` 获取 Skill 元数据。
-- 写入候选词事件。
-- 读取用户最近候选词事件。
+允许修改的文件：
 
-**允许修改的文件范围**
+- `backend/tests/test_training_task_service.py`
 
-- `backend/app/repositories/vocabulary.py`
-- `backend/tests/test_vocabulary_repository.py`
+允许新增的文件：
 
-**禁止修改的范围**
+- `backend/app/services/training_tasks.py`
 
-- 不编写或修改教学 Skill 语义。
-- 不生成 Prompt。
-- 不修改 Schema。
-- 不实现 Skill Registry。
-- 不修改 Agent Runtime、Workflow 或前端。
+禁止修改范围：
 
-**验收标准**
+- 数据库 Schema
+- Agent Runtime、ToolExecutor、ContextBuilder
+- Prompt / Skill / Workflow
+- Vue 前端
 
-- `skill_id + version` 唯一约束被测试覆盖。
-- JSON 字段以对象形式传入和返回。
-- 查询不存在记录时返回空结果。
-- 候选词事件能保留副线 signal 引用字段，但不解释其业务含义。
+已冻结的接口签名：
 
-**测试要求**
+```python
+def create_task_from_analysis(
+    database_path,
+    *,
+    user_id: int,
+    session_id: int,
+    analysis: dict,
+) -> int:
+    ...
 
-- 先新增 `backend/tests/test_vocabulary_repository.py`。
-- 覆盖词汇、Skill 版本、候选词事件。
-- 运行：`python -m pytest backend\tests\test_vocabulary_repository.py`
+def get_user_training_task(database_path, *, user_id: int, task_id: int) -> dict:
+    ...
+```
 
-**依赖关系**
+验收标准：
 
-- 任务 1。
-- 任务 3。
+- 写入 `generated_tasks`，`task_type="LOW_PRESSURE_LEARNING"`。
+- `content_json` 符合 `TrainingTaskContent`。
+- `quality_check_result.status="PASSED"`。
+- 读取任务时校验 `user_id`，其他用户访问抛出受控业务错误。
 
-**建议的中文 Git 提交信息**
+RED 测试：
 
-`新增词汇和 Skill 元数据 repository`
+- 创建任务后可通过 Repository 读回。
+- 其他用户读取同一 task 被拒绝。
+- 不存在 task 返回受控 not found。
 
-### 任务 6：实现训练会话、生成任务和学习证据 Repository
+GREEN 实现要求：
 
-**任务目标**
+- 复用现有 `create_generated_task/get_generated_task`。
+- 不新增表。
 
-为 `training_sessions`、`generated_tasks`、`generated_task_validations`、`learning_evidence` 提供普通 CRUD 和按用户/会话查询。
+完整回归命令：
 
-**已确定的输入**
+- `python -m pytest backend\tests\test_training_task_service.py`
+- `python -m pytest backend\tests`
 
-- 用户 ID。
-- Workflow Stage。
-- session 状态。
-- 生成任务字段。
-- 校验记录字段。
-- 学习证据字段。
+推荐中文提交信息：`实现训练任务薄封装服务`
 
-**已确定的输出**
+### 任务 6：实现学习证据写入服务
 
-- 创建训练会话。
-- 更新训练会话状态和完成时间。
-- 创建生成任务。
-- 获取生成任务。
-- 写入生成任务校验记录。
-- 写入学习证据。
-- 按用户、session、task 查询学习证据。
+目标：为训练提交封装学习证据 payload 生成和 append-only 写入。
 
-**允许修改的文件范围**
+依赖：任务 3、任务 5。
+
+允许修改的文件：
+
+- `backend/tests/test_learning_evidence_service.py`
+
+允许新增的文件：
+
+- `backend/app/services/learning_evidence.py`
+
+禁止修改范围：
+
+- 数据库 Schema
+- Agent Runtime、ContextBuilder、Memory
+- Prompt / Skill / Workflow
+
+已冻结的接口签名：
+
+```python
+def record_training_submission_evidence(
+    database_path,
+    *,
+    user_id: int,
+    session_id: int,
+    task_id: int,
+    answers: list[dict],
+    score_result: dict,
+    time_spent_seconds: int | None,
+) -> int:
+    ...
+```
+
+验收标准：
+
+- 写入 `learning_evidence.evidence_type="TRAINING_ANSWER"`。
+- payload 包含契约第 4.3 节所有字段。
+- 多次调用追加多条证据，不覆盖旧证据。
+
+RED 测试：
+
+- 写入后按 task 查询能读回完整 payload。
+- 两次写入生成两条不同 evidence。
+
+GREEN 实现要求：
+
+- 复用现有 `create_learning_evidence`。
+- 不做画像建议写入。
+
+完整回归命令：
+
+- `python -m pytest backend\tests\test_learning_evidence_service.py`
+- `python -m pytest backend\tests`
+
+推荐中文提交信息：`实现训练提交证据写入服务`
+
+### 任务 7：实现画像更新建议薄服务
+
+目标：基于确定性评分结果写入普通 `profile_update_suggestions`，不应用画像、不生成 profile snapshot。
+
+依赖：任务 3、任务 6。
+
+允许修改的文件：
+
+- `backend/tests/test_profile_suggestion_service.py`
+
+允许新增的文件：
+
+- `backend/app/services/profile_suggestions.py`
+
+禁止修改范围：
+
+- 数据库 Schema
+- Profile snapshot 写入逻辑
+- Agent Runtime、Memory、Workflow
+- Prompt / Skill
+
+已冻结的接口签名：
+
+```python
+def propose_profile_update_from_score(
+    database_path,
+    *,
+    user_id: int,
+    evidence_id: int,
+    score_result: dict,
+) -> int:
+    ...
+```
+
+验收标准：
+
+- 写入 `profile_update_suggestions`。
+- `direction` 只能是 `IMPROVE/DECLINE/UNCERTAIN/NO_CHANGE` 中的一个。
+- `evidence_refs` 包含 evidence_id。
+- `agent_payload.source="DETERMINISTIC_SCORER"`。
+- 不修改 `profile_snapshots`。
+
+RED 测试：
+
+- 高正确率生成 IMPROVE 或 NO_CHANGE。
+- 低正确率生成 DECLINE。
+- 无能力信息生成 UNCERTAIN。
+
+GREEN 实现要求：
+
+- 复用 `create_profile_suggestion`。
+- 不扩展画像建议状态枚举。
+
+完整回归命令：
+
+- `python -m pytest backend\tests\test_profile_suggestion_service.py`
+- `python -m pytest backend\tests`
+
+推荐中文提交信息：`实现画像建议薄服务`
+
+### 任务 8：实现训练提交编排服务
+
+目标：组合任务归属校验、评分、证据写入和画像建议写入，形成训练提交业务闭环服务。
+
+依赖：任务 3、5、6、7。
+
+允许修改的文件：
+
+- `backend/tests/test_training_submission_service.py`
+
+允许新增的文件：
+
+- `backend/app/services/training_submission.py`
+
+禁止修改范围：
+
+- 数据库 Schema
+- API 路由
+- Agent Runtime、ToolExecutor、ContextBuilder
+- Prompt / Skill / Workflow
+
+已冻结的接口签名：
+
+```python
+def submit_training_task(
+    database_path,
+    *,
+    user_id: int,
+    task_id: int,
+    answers: list[dict],
+    time_spent_seconds: int | None = None,
+    used_hints: list[str] | None = None,
+) -> dict:
+    ...
+```
+
+验收标准：
+
+- 当前用户只能提交自己的任务。
+- 返回契约第 4.1 节响应所需字段。
+- 成功提交写入 learning evidence 和 profile suggestion。
+- 不存在任务、其他用户任务、非法任务内容均返回受控业务错误。
+
+RED 测试：
+
+- 正常提交完整闭环。
+- 其他用户提交被拒绝。
+- 不存在任务返回 not found。
+- 非 MULTIPLE_CHOICE 内容返回受控错误。
+
+GREEN 实现要求：
+
+- 不调用 Agent 或 LLM。
+- 不新增表。
+- 错误类型用本服务内稳定异常类或稳定错误 dict。
+
+完整回归命令：
+
+- `python -m pytest backend\tests\test_training_submission_service.py`
+- `python -m pytest backend\tests`
+
+推荐中文提交信息：`实现训练提交编排服务`
+
+## 阶段三：业务 API 路由
+
+### 任务 9：实现文本分析 API 路由
+
+目标：新增 `/api/learning/analyze-text`，将 API 身份绑定和文本分析服务接起来。
+
+依赖：任务 1、4。
+
+允许修改的文件：
+
+- `backend/app/main.py`
+- `backend/tests/test_learning_api.py`
+
+允许新增的文件：
+
+- `backend/app/api/learning.py`
+
+禁止修改范围：
+
+- Agent Runtime、ToolExecutor、ContextBuilder
+- Provider 公共契约
+- 数据库 Schema
+- Vue 前端
+
+已冻结的接口签名：
+
+```http
+POST /api/learning/analyze-text
+Headers:
+  X-LingoForge-User-Id: int
+  X-LingoForge-Session-Id: int optional
+Body: TextAnalysisRequest
+Response: TextAnalysisResponse
+```
+
+验收标准：
+
+- 请求体不能包含身份字段。
+- 缺失或非法用户头返回 422。
+- 正常请求返回关键词、练习题和 `agent_feedback`。
+
+RED 测试：
+
+- 正常分析成功。
+- 请求体带 `user_id` 被拒绝。
+- 缺失用户头不调用服务。
+
+GREEN 实现要求：
+
+- 使用 `APIRouter(prefix="/api/learning")`。
+- 路由注册进 `create_app`。
+- 不写数据库。
+
+完整回归命令：
+
+- `python -m pytest backend\tests\test_learning_api.py`
+- `python -m pytest backend\tests`
+
+推荐中文提交信息：`新增文本分析 API`
+
+### 任务 10：实现训练提交 API 路由
+
+目标：新增 `/api/training/tasks/{task_id}/submit`，绑定当前用户并调用训练提交服务。
+
+依赖：任务 2、8。
+
+允许修改的文件：
+
+- `backend/app/main.py`
+- `backend/tests/test_training_api.py`
+
+允许新增的文件：
+
+- `backend/app/api/training.py`
+
+禁止修改范围：
+
+- 数据库 Schema
+- Agent Runtime、ToolExecutor、ContextBuilder
+- Prompt / Skill / Workflow
+- Vue 前端
+
+已冻结的接口签名：
+
+```http
+POST /api/training/tasks/{task_id}/submit
+Headers:
+  X-LingoForge-User-Id: int
+Body: TrainingSubmitRequest
+Response: TrainingSubmitResponse
+```
+
+验收标准：
+
+- API 层使用请求头绑定 `user_id`。
+- 请求体包含身份字段时返回 422。
+- 其他用户任务返回 403。
+- 成功提交返回 score、question_results、evidence_id、profile_suggestion_id。
+
+RED 测试：
+
+- 正常提交成功。
+- 身份覆盖字段被拒绝。
+- 其他用户任务被拒绝。
+- 非法 answers 被拒绝。
+
+GREEN 实现要求：
+
+- 业务错误映射为稳定 `detail.code`。
+- 不调用 Agent 或 LLM。
+
+完整回归命令：
+
+- `python -m pytest backend\tests\test_training_api.py`
+- `python -m pytest backend\tests`
+
+推荐中文提交信息：`新增训练提交 API`
+
+### 任务 11：实现训练结果查询 API 路由
+
+目标：新增 `/api/training/tasks/{task_id}/result`，返回任务摘要和最新提交结果。
+
+依赖：任务 5、6、10。
+
+允许修改的文件：
+
+- `backend/app/api/training.py`
+- `backend/tests/test_training_api.py`
+
+允许新增的文件：
+
+- 若确有需要，可新增 `backend/app/services/training_results.py`
+
+禁止修改范围：
+
+- 数据库 Schema
+- Agent Runtime、ContextBuilder、ToolExecutor
+- Prompt / Skill / Workflow
+- Vue 前端
+
+已冻结的接口签名：
+
+```http
+GET /api/training/tasks/{task_id}/result
+Headers:
+  X-LingoForge-User-Id: int
+Response: TrainingResultResponse
+```
+
+验收标准：
+
+- 当前用户只能查询自己的任务。
+- 无提交时 `latest_submission=null`。
+- 有多次提交时返回最新 evidence。
+- 响应不包含其他用户数据。
+
+RED 测试：
+
+- 无提交查询。
+- 一次提交后查询。
+- 两次提交后返回最新。
+- 其他用户查询被拒绝。
+
+GREEN 实现要求：
+
+- 可通过现有 `get_learning_evidence_by_task` 查询，并在服务/API 层过滤 task 归属。
+- 不新增表。
+
+完整回归命令：
+
+- `python -m pytest backend\tests\test_training_api.py`
+- `python -m pytest backend\tests`
+
+推荐中文提交信息：`新增训练结果查询 API`
+
+## 阶段四：Repository 查询补强与测试基础设施
+
+### 任务 12：补充训练 Repository 归属查询 helper
+
+目标：在不改 Schema 的前提下，为 Service 提供明确的按用户读取任务、读取最新提交证据 helper。
+
+依赖：任务 5、6、11。
+
+允许修改的文件：
 
 - `backend/app/repositories/training.py`
 - `backend/tests/test_training_repository.py`
 
-**禁止修改的范围**
+允许新增的文件：无。
 
-- 不实现判分。
-- 不实现生成任务质量校验。
-- 不修改 Schema。
-- 不设计 Workflow 状态机。
-- 不修改 Agent Runtime、ContextBuilder、Prompt、Skill 或前端。
+禁止修改范围：
 
-**验收标准**
+- 数据库 Schema
+- API 路由
+- Agent Runtime、ToolExecutor、ContextBuilder
+- Prompt / Skill / Workflow
 
-- 会话、任务、校验、证据均可写入并回读。
-- 原始证据写入是追加式，不覆盖旧记录。
-- JSON 字段正常序列化和反序列化。
-- 外键错误由 SQLite 抛出或被测试明确覆盖。
+已冻结的接口签名：
 
-**测试要求**
+```python
+def get_generated_task_for_user(database_path, *, user_id: int, task_id: int) -> dict | None:
+    ...
 
-- 先新增 `backend/tests/test_training_repository.py`。
-- 覆盖会话、任务、校验记录和多条证据追加。
-- 运行：`python -m pytest backend\tests\test_training_repository.py`
-
-**依赖关系**
-
-- 任务 1。
-- 任务 3。
-- 任务 4。
-- 任务 5。
-
-**建议的中文 Git 提交信息**
-
-`新增训练会话和学习证据 repository`
-
-### 任务 7：实现副线运行和副线信号 Repository
-
-**任务目标**
-
-为 `sidequest_runs` 和 `sidequest_signals` 提供普通写入和查询能力。
-
-**已确定的输入**
-
-- 用户 ID。
-- 副线任务名。
-- objective JSON。
-- result JSON。
-- 副线 signal 字段。
-
-**已确定的输出**
-
-- 创建副线运行记录。
-- 写入一条或多条副线信号。
-- 按用户读取待验证副线信号。
-- 按 run ID 读取信号。
-
-**允许修改的文件范围**
-
-- `backend/app/repositories/sidequest.py`
-- `backend/tests/test_sidequest_repository.py`
-
-**禁止修改的范围**
-
-- 不让副线信号写入 `learning_evidence`。
-- 不更新正式画像。
-- 不实现机场副线业务流程。
-- 不修改 Schema。
-- 不修改 Agent Runtime、Workflow 或前端。
-
-**验收标准**
-
-- 副线运行和一对多信号关系可回读。
-- 待验证信号查询只返回 `is_pending_verification = 1` 的记录。
-- 副线 repository 不写入画像或正式证据表。
-
-**测试要求**
-
-- 先新增 `backend/tests/test_sidequest_repository.py`。
-- 覆盖 run 创建、多 signal 写入、待验证查询。
-- 运行：`python -m pytest backend\tests\test_sidequest_repository.py`
-
-**依赖关系**
-
-- 任务 1。
-- 任务 3。
-- 任务 4。
-- 任务 5。
-
-**建议的中文 Git 提交信息**
-
-`新增副线运行和信号 repository`
-
-### 任务 8：实现隔离检测题与尝试 Repository
-
-**任务目标**
-
-为 `isolated_test_items`、`isolated_test_attempts`、`isolated_attempt_items` 提供普通 CRUD 和连接关系查询。
-
-**已确定的输入**
-
-- 隔离题目标能力。
-- item version。
-- item payload。
-- answer key 和 rationale JSON。
-- 用户答案、分数 JSON、用时。
-
-**已确定的输出**
-
-- 创建隔离题。
-- 按能力列出 active 隔离题。
-- 创建隔离检测尝试。
-- 关联 attempt 和 item。
-- 读取 attempt 及其 item 列表。
-
-**允许修改的文件范围**
-
-- `backend/app/repositories/isolated_tests.py`
-- `backend/tests/test_isolated_repository.py`
-
-**禁止修改的范围**
-
-- 不实现 `get_isolated_test_items` 服务。
-- 不实现隔离题阶段权限。
-- 不把隔离题暴露给 Agent。
-- 不修改 Schema。
-- 不修改 Agent Runtime、Workflow 或前端。
-
-**验收标准**
-
-- 连接表能保持题目顺序和版本。
-- active 过滤可用。
-- 重复关联同一 attempt 和 item 时遵守唯一约束。
-- repository 只做数据访问，不做隔离权限裁决。
-
-**测试要求**
-
-- 先新增 `backend/tests/test_isolated_repository.py`。
-- 覆盖题目创建、active 查询、attempt 创建、连接表关系。
-- 运行：`python -m pytest backend\tests\test_isolated_repository.py`
-
-**依赖关系**
-
-- 任务 1。
-- 任务 3。
-- 任务 4。
-
-**建议的中文 Git 提交信息**
-
-`新增隔离检测 repository`
-
-### 任务 9：实现工具调用和 Agent 决策日志 Repository
-
-**任务目标**
-
-为 `tool_call_logs` 和 `agent_decision_logs` 提供普通写入和查询能力。
-
-**已确定的输入**
-
-- 用户 ID，可为空。
-- session ID，可为空。
-- call name、call type、input JSON、output JSON、status、error_code。
-- decision type、input summary JSON、decision JSON、evidence_refs。
-
-**已确定的输出**
-
-- 写入工具调用日志。
-- 写入 Agent 决策日志。
-- 按用户、session、call type 查询日志。
-- 按 session 查询 Agent 决策。
-
-**允许修改的文件范围**
-
-- `backend/app/repositories/logs.py`
-- `backend/tests/test_logs_repository.py`
-
-**禁止修改的范围**
-
-- 不实现 Function Calling Loop。
-- 不实现 Agent Decision Schema 校验。
-- 不实现 Context Manifest。
-- 不修改 Schema。
-- 不修改 Agent Runtime、Workflow 或前端。
-
-**验收标准**
-
-- 成功和失败日志均可记录。
-- JSON 字段可回读为对象。
-- 查询按创建顺序稳定返回。
-- 不存在 session 时可返回空列表。
-
-**测试要求**
-
-- 先新增 `backend/tests/test_logs_repository.py`。
-- 覆盖工具日志、服务日志、Agent 决策日志。
-- 运行：`python -m pytest backend\tests\test_logs_repository.py`
-
-**依赖关系**
-
-- 任务 1。
-- 任务 3。
-- 任务 4。
-
-**建议的中文 Git 提交信息**
-
-`新增工具和决策日志 repository`
-
-## 阶段三：当前基础能力的测试补强
-
-### 任务 10：补充数据库 Schema 完整性测试
-
-**任务目标**
-
-在不修改 Schema 的前提下，补充当前核心表的默认值、唯一约束和关键外键测试。
-
-**已确定的输入**
-
-- 当前 `backend/app/schema.sql`。
-- 临时 SQLite 数据库。
-
-**已确定的输出**
-
-- 更完整的数据库约束回归测试。
-
-**允许修改的文件范围**
-
-- `backend/tests/test_database.py`
-
-**禁止修改的范围**
-
-- 不修改 `backend/app/schema.sql`。
-- 不修改 repository。
-- 不修改业务代码。
-- 不修改前端。
-
-**验收标准**
-
-- 测试覆盖 `skill_versions` 的唯一约束。
-- 测试覆盖 JSON 默认值字段至少 3 个代表表。
-- 测试覆盖 `sidequest_signals`、`generated_tasks`、`isolated_attempt_items` 的关键外键。
-- 所有测试使用临时数据库。
-
-**测试要求**
-
-- 先补测试。
-- 运行：`python -m pytest backend\tests\test_database.py`
-
-**依赖关系**
-
-- 无。
-
-**建议的中文 Git 提交信息**
-
-`补充数据库 Schema 完整性测试`
-
-### 任务 11：补充配置解析测试
-
-**任务目标**
-
-补充当前配置读取的边界测试，确保环境变量解析稳定且不泄露密钥。
-
-**已确定的输入**
-
-- 当前 `backend/app/config.py`。
-- 环境变量：`CORS_ORIGINS`、`DEEPSEEK_THINKING_ENABLED`、`DATABASE_PATH`。
-
-**已确定的输出**
-
-- 配置解析回归测试。
-- 如发现现有解析对大小写、空格或 false 值处理不稳定，可做最小修复。
-
-**允许修改的文件范围**
-
-- `backend/app/config.py`
-- `backend/tests/test_config.py`
-
-**禁止修改的范围**
-
-- 不修改 DeepSeek 默认模型、base URL 或 thinking 默认值。
-- 不新增配置项。
-- 不打印或读取真实 API key。
-- 不修改前端。
-
-**验收标准**
-
-- CORS 逗号分隔和空格裁剪行为有测试。
-- bool true/false 常见写法有测试。
-- `public_summary()` 不包含 `DEEPSEEK_API_KEY`。
-- 默认配置保持不变。
-
-**测试要求**
-
-- 先补测试，再按需最小修复。
-- 运行：`python -m pytest backend\tests\test_config.py`
-
-**依赖关系**
-
-- 无。
-
-**建议的中文 Git 提交信息**
-
-`补充配置解析边界测试`
-
-### 任务 12：补充 Mock LLM Provider 测试
-
-**任务目标**
-
-补充 Mock Provider 对预设响应队列、工具名透传和 timeout 参数记录的测试，保证后续 Agent Runtime 测试可复用。
-
-**已确定的输入**
-
-- 当前 `MockLLMProvider`。
-- `LLMMessage`、`LLMResponse`、`LLMToolCall`、`LLMToolSpec`。
-
-**已确定的输出**
-
-- Mock Provider 行为回归测试。
-- 如发现现有 Mock 对测试注入不稳定，可做最小修复。
-
-**允许修改的文件范围**
-
-- `backend/app/llm/mock_provider.py`
-- `backend/tests/test_llm_provider.py`
-
-**禁止修改的范围**
-
-- 不实现 DeepSeek Provider。
-- 不改变 `LLMProvider.generate` 抽象接口。
-- 不实现 Function Calling Loop。
-- 不访问网络。
-- 不修改前端。
-
-**验收标准**
-
-- 预设响应按顺序返回。
-- 队列耗尽后回到默认 mock 响应。
-- 默认响应记录传入工具名。
-- 默认响应记录 timeout。
-
-**测试要求**
-
-- 先补测试，再按需最小修复。
-- 运行：`python -m pytest backend\tests\test_llm_provider.py`
-
-**依赖关系**
-
-- 无。
-
-**建议的中文 Git 提交信息**
-
-`补充 Mock LLM Provider 行为测试`
-
-### 任务 13：补充数据库重置脚本测试
-
-**任务目标**
-
-为 `backend/scripts/reset_db.py` 增加测试，确认脚本尊重 `DATABASE_PATH` 并可重复执行。
-
-**已确定的输入**
-
-- 临时数据库路径。
-- `DATABASE_PATH` 环境变量。
-- 当前 reset 脚本。
-
-**已确定的输出**
-
-- 脚本级回归测试。
-
-**允许修改的文件范围**
-
-- `backend/tests/test_reset_db_script.py`
-- `backend/scripts/reset_db.py`
-
-**禁止修改的范围**
-
-- 不修改 Schema。
-- 不修改数据库连接策略。
-- 不填充种子数据。
-- 不修改前端。
-
-**验收标准**
-
-- 测试能在临时路径执行 reset。
-- reset 后核心表存在。
-- 重复执行不失败。
-- 输出不包含任何密钥。
-
-**测试要求**
-
-- 先新增 `backend/tests/test_reset_db_script.py`。
-- 可使用 subprocess 或直接调用 `main()`，但必须隔离环境变量。
-- 运行：`python -m pytest backend\tests\test_reset_db_script.py`
-
-**依赖关系**
-
-- 无。
-
-**建议的中文 Git 提交信息**
-
-`补充数据库重置脚本测试`
-
-## 总体验证检查点
-
-Claude Code 完成全部任务后，必须执行：
-
-```powershell
-python -m pytest backend\tests
-git status --short
+def get_latest_training_submission_evidence(database_path, *, task_id: int) -> dict | None:
+    ...
 ```
 
-验收要求：
+验收标准：
 
-- 后端测试全部通过。
-- 未修改前端目录。
-- 未修改数据库 Schema。
-- 未新增 Prompt 或 Skill 语义文件。
-- 未提交真实 API key。
-- 每个任务都有独立中文提交信息。
+- `get_generated_task_for_user` 只返回属于该用户的任务。
+- 最新提交证据按 `created_at DESC, id DESC` 截取最新一条。
+- JSON 字段反序列化行为与现有 Repository 一致。
+
+RED 测试：
+
+- 其他用户任务返回 None。
+- 多条 evidence 返回最新一条。
+
+GREEN 实现要求：
+
+- 只做查询 helper，不改变现有函数行为。
+
+完整回归命令：
+
+- `python -m pytest backend\tests\test_training_repository.py`
+- `python -m pytest backend\tests`
+
+推荐中文提交信息：`补充训练任务归属查询`
+
+### 任务 13：整理后端测试数据工厂
+
+目标：新增测试工厂 helper，减少 API 和 Service 测试重复建用户、session、任务、题目。
+
+依赖：任务 2、5。
+
+允许修改的文件：
+
+- `backend/tests/test_training_api.py`
+- `backend/tests/test_training_submission_service.py`
+- `backend/tests/test_training_task_service.py`
+
+允许新增的文件：
+
+- `backend/tests/factories.py`
+
+禁止修改范围：
+
+- 生产代码
+- 数据库 Schema
+- Agent Runtime、ToolExecutor、ContextBuilder
+- Prompt / Skill
+
+已冻结的接口签名：
+
+```python
+def create_user_with_session(db_path, *, stage: str = "FIRST_MAIN") -> dict:
+    ...
+
+def create_multiple_choice_task(db_path, *, user_id: int, session_id: int) -> int:
+    ...
+```
+
+验收标准：
+
+- 工厂只服务测试，不被生产代码导入。
+- 使用现有 Repository 创建数据。
+- 被整理的测试行为不变。
+
+RED 测试：
+
+- 工厂创建的任务可被 `get_generated_task` 读回。
+
+GREEN 实现要求：
+
+- 避免把业务判断写进工厂。
+
+完整回归命令：
+
+- `python -m pytest backend\tests`
+
+推荐中文提交信息：`整理后端测试数据工厂`
+
+### 任务 14：补充 Agent API 与 DeepSeek Provider 反例测试
+
+目标：合并完成上一轮计划中尚未执行的 API 身份反例、未知工具摘要、DeepSeek HTTP 错误和坏响应测试补强。
+
+依赖：当前 `0f17ee6` 之后代码。
+
+允许修改的文件：
+
+- `backend/tests/test_agent_api.py`
+- `backend/tests/test_deepseek_provider.py`
+- `backend/tests/test_config.py`
+
+允许新增的文件：无。
+
+禁止修改范围：
+
+- `backend/app/agent/`
+- `backend/app/llm/deepseek_provider.py`
+- `backend/app/api/agent.py`
+- Provider 公共契约
+- ToolExecutor 公共契约
+
+已冻结的接口签名：
+
+```python
+DeepSeekHTTPError
+DeepSeekBadResponseError
+POST /api/agent/run
+```
+
+验收标准：
+
+- 400/500 映射为 `DeepSeekHTTPError`。
+- choices/message/tool_calls/arguments 格式错误映射为 `DeepSeekBadResponseError`。
+- Agent API 缺失身份头、非法身份头、未知工具均有反例测试。
+- 不访问真实 DeepSeek API。
+
+RED 测试：
+
+- 每个错误路径先失败再实现测试所需 fixture 调整。
+
+GREEN 实现要求：
+
+- 原则上只补测试；只有发现阻塞性真实 bug 才可做最小修复，并在提交说明中写清。
+
+完整回归命令：
+
+- `python -m pytest backend\tests\test_agent_api.py backend\tests\test_deepseek_provider.py backend\tests\test_config.py`
+- `python -m pytest backend\tests`
+
+推荐中文提交信息：`补强 Agent 与 DeepSeek 反例测试`
+
+## 阶段五：Demo 数据、Smoke 与文档
+
+### 任务 15：新增 Demo seed 脚本
+
+目标：新增可重复运行的 demo 数据脚本，创建演示用户、目标、画像、词汇、session 和一个可提交训练任务。
+
+依赖：任务 5。
+
+允许修改的文件：
+
+- `backend/tests/test_demo_seed_script.py`
+
+允许新增的文件：
+
+- `scripts/seed_demo.py`
+
+禁止修改范围：
+
+- 数据库 Schema
+- 后端业务模块
+- Vue 前端
+- Agent Runtime、Prompt、Skill
+
+已冻结的接口签名：
+
+```bash
+python scripts\seed_demo.py --database-path <path>
+```
+
+验收标准：
+
+- 脚本可重复运行，不因已有数据崩溃。
+- 不写入真实 API Key。
+- 至少创建一个用户、一个 user_goal、一个 profile_snapshot、若干 vocabulary_items、一个 training_session、一个 generated_task。
+- 输出中文摘要，包含 user_id/session_id/task_id。
+
+RED 测试：
+
+- 在临时数据库运行脚本后断言核心数据存在。
+- 连续运行两次仍通过。
+
+GREEN 实现要求：
+
+- 使用现有 Repository。
+- 不调用 Agent 或 DeepSeek。
+
+完整回归命令：
+
+- `python -m pytest backend\tests\test_demo_seed_script.py`
+- `python scripts\seed_demo.py --database-path %TEMP%\lingoforge_demo.sqlite3`
+- `python -m pytest backend\tests`
+
+推荐中文提交信息：`新增演示数据种子脚本`
+
+### 任务 16：新增 Mock 模式后端 smoke test 与 README 说明
+
+目标：新增 Mock 模式 smoke test 脚本，并补充 README 后端启动、DeepSeek 环境变量、文本分析和训练提交 API 示例。
+
+依赖：任务 9、10、11、15。
+
+允许修改的文件：
+
+- `README.md`
+- `backend/tests/test_smoke_backend_script.py`
+
+允许新增的文件：
+
+- `scripts/smoke_backend.py`
+
+禁止修改范围：
+
+- `backend/app/`
+- 数据库 Schema
+- Vue 前端
+- Agent Runtime、Prompt、Skill
+
+已冻结的接口签名：
+
+```bash
+python scripts\smoke_backend.py
+```
+
+验收标准：
+
+- smoke 脚本使用临时数据库和 `LLM_MODE=mock`。
+- 脚本调用 `/health`、`/api/learning/analyze-text`、`/api/training/tasks/{task_id}/submit`、`/api/training/tasks/{task_id}/result`。
+- README 示例不包含真实密钥。
+- README 说明身份通过请求头绑定，不能放在请求体。
+
+RED 测试：
+
+- 脚本运行失败时测试失败。
+
+GREEN 实现要求：
+
+- 脚本不写仓库内数据库。
+- README 只做文档同步，不改架构规格。
+
+完整回归命令：
+
+- `python scripts\smoke_backend.py`
+- `python -m pytest backend\tests\test_smoke_backend_script.py`
+- `python -m pytest backend\tests`
+
+推荐中文提交信息：`新增后端 smoke 测试与启动说明`
+
+## 本计划完成后的交接要求
+
+DS/Claude Code 完成后必须汇报：
+
+- 每个任务对应提交哈希。
+- 每个任务运行的测试命令和结果。
+- 是否有任何偏离 `docs/IMPLEMENTATION_CONTRACTS.md` 的地方。
+- 是否修改了禁止范围。
+- 当前完整后端测试结果。
+
+Codex 随后负责审查、修复高风险问题，并继续实现剩余核心模块。
