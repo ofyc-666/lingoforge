@@ -183,3 +183,45 @@ def get_learning_evidence_by_task(
     for row in rows:
         row["payload_json"] = from_json_text(row.get("payload_json"), {})
     return rows
+
+
+# --------------- 归属查询 helper ---------------
+
+def get_generated_task_for_user(
+    database_path: str | Path,
+    *,
+    user_id: int,
+    task_id: int,
+) -> dict[str, Any] | None:
+    """按用户 ID 获取生成任务。只返回属于该用户的任务，其他用户或无任务返回 None。"""
+    row = fetch_one(
+        database_path,
+        "SELECT * FROM generated_tasks WHERE id = ? AND user_id = ?",
+        (task_id, user_id),
+    )
+    if row is None:
+        return None
+    row["difficulty_params"] = from_json_text(row.get("difficulty_params"), {})
+    row["content_json"] = from_json_text(row.get("content_json"), {})
+    row["quality_requirements"] = from_json_text(row.get("quality_requirements"), {})
+    row["quality_check_result"] = from_json_text(row.get("quality_check_result"), {})
+    return row
+
+
+def get_latest_training_submission_evidence(
+    database_path: str | Path,
+    *,
+    task_id: int,
+) -> dict[str, Any] | None:
+    """获取指定任务的最新提交证据（按 created_at DESC, id DESC）。"""
+    row = fetch_one(
+        database_path,
+        """SELECT * FROM learning_evidence
+           WHERE task_id = ? AND evidence_type = 'TRAINING_ANSWER'
+           ORDER BY created_at DESC, id DESC LIMIT 1""",
+        (task_id,),
+    )
+    if row is None:
+        return None
+    row["payload_json"] = from_json_text(row.get("payload_json"), {})
+    return row

@@ -13,6 +13,8 @@ from app.repositories.training import (
     create_training_session,
     create_task_validation,
     get_generated_task,
+    get_generated_task_for_user,
+    get_latest_training_submission_evidence,
     get_learning_evidence_by_session,
     get_learning_evidence_by_task,
     get_learning_evidence_by_user,
@@ -31,6 +33,11 @@ def db_path():
 @pytest.fixture
 def user_id(db_path):
     return create_user(db_path, "训练测试用户")
+
+
+@pytest.fixture
+def other_user_id(db_path):
+    return create_user(db_path, "其他用户")
 
 
 @pytest.fixture
@@ -70,7 +77,6 @@ class TestTrainingSessionRepository:
 
     def test_create_with_default_status(self, db_path, user_id):
         sid = create_training_session(db_path, user_id=user_id, stage="DIAGNOSTIC")
-        # 验证默认状态为 PENDING
         from app.repositories.base import fetch_one
         session = fetch_one(db_path, "SELECT * FROM training_sessions WHERE id = ?", (sid,))
         assert session["status"] == "PENDING"
@@ -83,7 +89,6 @@ class TestTrainingSessionRepository:
         assert session["completed_at"] is not None
 
     def test_update_nonexistent_session_does_not_raise(self, db_path):
-        # 不应抛出异常
         update_session_status(db_path, 999, status="COMPLETED")
 
 
@@ -168,6 +173,43 @@ class TestTaskValidationRepository:
         assert record["attempt_number"] == 2
 
 
+class TestGetGeneratedTaskForUser:
+    """get_generated_task_for_user 测试。"""
+
+    def test_returns_task_for_correct_user(self, db_path, task_id, user_id):
+        task = get_generated_task_for_user(db_path, user_id=user_id, task_id=task_id)
+        assert task is not None
+        assert task["id"] == task_id
+
+    def test_returns_none_for_other_user(self, db_path, task_id, other_user_id):
+        task = get_generated_task_for_user(db_path, user_id=other_user_id, task_id=task_id)
+        assert task is None
+
+    def test_returns_none_for_nonexistent_task(self, db_path, user_id):
+        assert get_generated_task_for_user(db_path, user_id=user_id, task_id=999) is None
+
+
+class TestGetLatestTrainingSubmissionEvidence:
+    """get_latest_training_submission_evidence 测试。"""
+
+    def test_returns_latest_evidence(self, db_path, task_id, user_id):
+        eid1 = create_learning_evidence(
+            db_path, user_id=user_id, task_id=task_id, evidence_type="TRAINING_ANSWER",
+            payload={"attempt": 1},
+        )
+        eid2 = create_learning_evidence(
+            db_path, user_id=user_id, task_id=task_id, evidence_type="TRAINING_ANSWER",
+            payload={"attempt": 2},
+        )
+        latest = get_latest_training_submission_evidence(db_path, task_id=task_id)
+        assert latest is not None
+        assert latest["id"] == eid2
+        assert latest["payload_json"] == {"attempt": 2}
+
+    def test_returns_none_for_no_evidence(self, db_path, task_id):
+        assert get_latest_training_submission_evidence(db_path, task_id=task_id) is None
+
+
 class TestLearningEvidenceRepository:
     """学习证据 Repository 测试。"""
 
@@ -191,7 +233,6 @@ class TestLearningEvidenceRepository:
             db_path, user_id=user_id, session_id=session_id, task_id=task_id,
             evidence_type="TRAINING_ANSWER", payload={"answer": "B"},
         )
-        # 两条记录都存在，不覆盖
         assert eid1 != eid2
         records = get_learning_evidence_by_user(db_path, user_id)
         assert len(records) == 2
