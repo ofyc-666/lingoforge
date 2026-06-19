@@ -5,6 +5,8 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.api.agent import get_settings as get_agent_settings
+from app.api.agent import router as agent_router
 from app.config import Settings, load_settings
 from app.database import database_is_initialized, init_database
 from app.llm.factory import create_llm_provider
@@ -27,6 +29,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+    app.dependency_overrides[get_agent_settings] = lambda: app_settings
 
     @app.get("/health")
     def health() -> dict[str, object]:
@@ -39,8 +42,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             "llm_provider": provider.name,
         }
 
+    app.include_router(agent_router)
+
     return app
 
 
 app = create_app()
-

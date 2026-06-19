@@ -98,9 +98,8 @@ def test_provider_factory_defaults_to_mock():
     assert provider.name == "mock"
 
 
-def test_provider_factory_blocks_unimplemented_deepseek():
+def test_provider_factory_requires_key_for_real_deepseek():
     settings = Settings(llm_mode="real", llm_provider="deepseek")
 
     with pytest.raises(LLMProviderConfigurationError):
         create_llm_provider(settings)
-

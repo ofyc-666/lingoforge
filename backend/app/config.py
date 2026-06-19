@@ -30,6 +30,7 @@ class Settings:
     cors_origins: tuple[str, ...] = ("http://localhost:5173", "http://127.0.0.1:5173")
     llm_mode: str = "mock"
     llm_provider: str = "deepseek"
+    deepseek_api_key: str | None = None
     deepseek_base_url: str = "https://api.deepseek.com"
     deepseek_model: str = "deepseek-v4-flash"
     deepseek_thinking_enabled: bool = False
@@ -60,6 +61,7 @@ def load_settings() -> Settings:
         cors_origins=tuple(cors) if cors else ("http://localhost:5173", "http://127.0.0.1:5173"),
         llm_mode=os.getenv("LLM_MODE", "mock"),
         llm_provider=os.getenv("LLM_PROVIDER", "deepseek"),
+        deepseek_api_key=os.getenv("DEEPSEEK_API_KEY"),
         deepseek_base_url=os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com"),
         deepseek_model=os.getenv("DEEPSEEK_MODEL", "deepseek-v4-flash"),
         deepseek_thinking_enabled=_as_bool(os.getenv("DEEPSEEK_THINKING_ENABLED"), default=False),
