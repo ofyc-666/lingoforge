@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 
 from app.database import init_database
-from app.repositories.training import create_training_session, get_generated_task
+from app.repositories.training import get_generated_task
 from app.repositories.users import create_user
 from app.services.training_tasks import (
     TrainingTaskAccessError,
@@ -13,6 +13,7 @@ from app.services.training_tasks import (
     create_task_from_analysis,
     get_user_training_task,
 )
+from factories import create_user_with_session
 from temp_paths import temp_db_path
 
 
@@ -24,18 +25,23 @@ def db_path():
 
 
 @pytest.fixture
-def user_id(db_path):
-    return create_user(db_path, "训练任务测试用户")
+def ctx(db_path):
+    return create_user_with_session(db_path)
+
+
+@pytest.fixture
+def user_id(ctx):
+    return ctx["user_id"]
+
+
+@pytest.fixture
+def session_id(ctx):
+    return ctx["session_id"]
 
 
 @pytest.fixture
 def other_user_id(db_path):
     return create_user(db_path, "其他用户")
-
-
-@pytest.fixture
-def session_id(db_path, user_id):
-    return create_training_session(db_path, user_id=user_id, stage="FIRST_MAIN")
 
 
 def _sample_analysis() -> dict:

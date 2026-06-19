@@ -8,8 +8,9 @@ from fastapi.testclient import TestClient
 from app.config import Settings
 from app.database import init_database
 from app.main import create_app
-from app.repositories.training import create_generated_task, create_training_session
+from app.repositories.training import get_generated_task
 from app.repositories.users import create_user
+from factories import create_multiple_choice_task, create_user_with_session
 from temp_paths import temp_db_path
 
 
@@ -39,35 +40,24 @@ def client(settings):
 
 def _create_user_and_task(db_path: str) -> tuple[int, int, int, str]:
     """创建测试用户、session 和 MULTIPLE_CHOICE 任务。返回 (user_id, session_id, task_id, db_path)。"""
-    uid = create_user(db_path, "API 测试用户")
-    sid = create_training_session(db_path, user_id=uid, stage="FIRST_MAIN")
-    content = {
-        "title": "词汇语境练习",
-        "raw_text": "The climate is changing rapidly.",
-        "instructions": "请选择最符合语境的答案。",
-        "questions": [
-            {
-                "question_id": "q1",
-                "question_type": "MULTIPLE_CHOICE",
-                "prompt": "climate 最接近？",
-                "options": [{"id": "A", "text": "气候"}, {"id": "B", "text": "变化"}],
-                "answer": "A",
-                "explanation": "climate = 气候。",
-                "target_ability": "VOCABULARY_CONTEXT",
-                "error_type_on_wrong": "VOCABULARY_CONTEXT_ERROR",
-            },
-        ],
-        "agent_feedback": "",
-        "source": "TEST",
-    }
-    tid = create_generated_task(
-        db_path, session_id=sid, user_id=uid,
-        task_type="LOW_PRESSURE_LEARNING",
-        target_ability="VOCABULARY_CONTEXT",
-        content_json=content,
-        quality_check_result={"status": "PASSED"},
-    )
+    ctx = create_user_with_session(db_path)
+    uid, sid = ctx["user_id"], ctx["session_id"]
+    tid = create_multiple_choice_task(db_path, user_id=uid, session_id=sid)
     return uid, sid, tid, db_path
+
+
+class TestTestFactory:
+    """测试工厂数据创建。"""
+
+    def test_factory_created_task_is_readable(self, db_path):
+        ctx = create_user_with_session(db_path)
+        tid = create_multiple_choice_task(db_path, user_id=ctx["user_id"], session_id=ctx["session_id"])
+        task = get_generated_task(db_path, tid)
+        assert task is not None
+        assert task["user_id"] == ctx["user_id"]
+        assert task["task_type"] == "LOW_PRESSURE_LEARNING"
+        content = task["content_json"]
+        assert len(content["questions"]) == 2
 
 
 class TestTrainingSubmitAPI:
@@ -78,7 +68,10 @@ class TestTrainingSubmitAPI:
         response = client.post(
             f"/api/training/tasks/{tid}/submit",
             json={
-                "answers": [{"question_id": "q1", "answer": "A"}],
+                "answers": [
+                    {"question_id": "q1", "answer": "A"},
+                    {"question_id": "q2", "answer": "B"},
+                ],
                 "time_spent_seconds": 30,
             },
             headers={"X-LingoForge-User-Id": str(uid)},
@@ -87,7 +80,7 @@ class TestTrainingSubmitAPI:
         data = response.json()
         assert data["task_id"] == tid
         assert data["session_id"] == sid
-        assert data["score"]["total"] == 1
+        assert data["score"]["total"] == 2
         assert data["evidence_id"] >= 1
 
     def test_identity_fields_in_body_rejected(self, client, db_path):
