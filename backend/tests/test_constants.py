@@ -11,6 +11,7 @@ from app.constants import (
     Confidence,
     DecisionType,
     EvidenceType,
+    MemoryStatus,
     ProfileSuggestionDirection,
     ProfileSuggestionStatus,
     SessionStatus,
@@ -26,6 +27,7 @@ from app.constants import (
     is_valid_confidence,
     is_valid_decision_type,
     is_valid_evidence_type,
+    is_valid_memory_status,
     is_valid_profile_suggestion_status,
     is_valid_session_status,
     is_valid_signal_type,
@@ -161,25 +163,52 @@ class TestProfileSuggestionStatus:
         statuses = {
             ProfileSuggestionStatus.ACCEPTED,
             ProfileSuggestionStatus.REJECTED,
-            ProfileSuggestionStatus.NEEDS_REVIEW,
         }
-        assert len(statuses) == 3
-
-    def test_needs_review_is_included(self):
-        # NEEDS_REVIEW 仅作为合法记忆状态被包含
-        assert ProfileSuggestionStatus.NEEDS_REVIEW == "NEEDS_REVIEW"
+        assert len(statuses) == 2
 
     def test_is_valid_profile_suggestion_status(self):
         assert is_valid_profile_suggestion_status("ACCEPTED")
         assert is_valid_profile_suggestion_status("REJECTED")
-        assert is_valid_profile_suggestion_status("NEEDS_REVIEW")
 
     def test_is_valid_profile_suggestion_status_rejects_invalid(self):
+        assert not is_valid_profile_suggestion_status("NEEDS_REVIEW")
         assert not is_valid_profile_suggestion_status("APPROVED")
         assert not is_valid_profile_suggestion_status("")
 
     def test_is_valid_profile_suggestion_status_no_exception(self):
         assert not is_valid_profile_suggestion_status(None)
+
+
+class TestMemoryStatus:
+    """记忆状态测试。"""
+
+    def test_expected_statuses(self):
+        statuses = {
+            MemoryStatus.ACTIVE,
+            MemoryStatus.NEEDS_REVIEW,
+            MemoryStatus.DISPUTED,
+            MemoryStatus.SUPERSEDED,
+            MemoryStatus.REJECTED,
+        }
+        assert len(statuses) == 5
+
+    def test_needs_review_is_valid_memory_status(self):
+        assert MemoryStatus.NEEDS_REVIEW == "NEEDS_REVIEW"
+        assert is_valid_memory_status("NEEDS_REVIEW")
+
+    def test_is_valid_memory_status(self):
+        assert is_valid_memory_status("ACTIVE")
+        assert is_valid_memory_status("DISPUTED")
+        assert is_valid_memory_status("SUPERSEDED")
+        assert is_valid_memory_status("REJECTED")
+
+    def test_is_valid_memory_status_rejects_invalid(self):
+        assert not is_valid_memory_status("ACCEPTED")
+        assert not is_valid_memory_status("APPROVED")
+        assert not is_valid_memory_status("")
+
+    def test_is_valid_memory_status_no_exception(self):
+        assert not is_valid_memory_status(None)
 
 
 class TestProfileSuggestionDirection:

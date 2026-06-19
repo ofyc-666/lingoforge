@@ -56,7 +56,16 @@ class ProfileSuggestionStatus:
 
     ACCEPTED = "ACCEPTED"
     REJECTED = "REJECTED"
+
+
+class MemoryStatus:
+    """记忆状态。"""
+
+    ACTIVE = "ACTIVE"
     NEEDS_REVIEW = "NEEDS_REVIEW"
+    DISPUTED = "DISPUTED"
+    SUPERSEDED = "SUPERSEDED"
+    REJECTED = "REJECTED"
 
 
 class ProfileSuggestionDirection:
@@ -176,7 +185,14 @@ _CALL_STATUS_VALUES: frozenset[str] = frozenset({
 _PROFILE_SUGGESTION_STATUS_VALUES: frozenset[str] = frozenset({
     ProfileSuggestionStatus.ACCEPTED,
     ProfileSuggestionStatus.REJECTED,
-    ProfileSuggestionStatus.NEEDS_REVIEW,
+})
+
+_MEMORY_STATUS_VALUES: frozenset[str] = frozenset({
+    MemoryStatus.ACTIVE,
+    MemoryStatus.NEEDS_REVIEW,
+    MemoryStatus.DISPUTED,
+    MemoryStatus.SUPERSEDED,
+    MemoryStatus.REJECTED,
 })
 
 _TASK_TYPE_VALUES: frozenset[str] = frozenset({
@@ -257,6 +273,10 @@ def is_valid_call_status(value: Any) -> bool:
 
 def is_valid_profile_suggestion_status(value: Any) -> bool:
     return isinstance(value, str) and value in _PROFILE_SUGGESTION_STATUS_VALUES
+
+
+def is_valid_memory_status(value: Any) -> bool:
+    return isinstance(value, str) and value in _MEMORY_STATUS_VALUES
 
 
 def is_valid_task_type(value: Any) -> bool:

@@ -177,6 +177,10 @@ class TestCandidateVocabularyEventRepository:
             )
         events = get_recent_candidate_events(db_path, user_id, limit=3)
         assert len(events) == 3
+        returned_values = [event["candidate_items"][0]["i"] for event in events]
+        assert returned_values == [2, 3, 4]
+        assert 0 not in returned_values
+        assert 1 not in returned_values
 
     def test_no_events_returns_empty_list(self, user_id, db_path):
         assert get_recent_candidate_events(db_path, user_id) == []

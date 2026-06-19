@@ -155,9 +155,13 @@ def get_recent_candidate_events(
     """读取用户最近候选词事件（按创建时间升序）。"""
     rows = fetch_all(
         database_path,
-        "SELECT * FROM candidate_vocabulary_events WHERE user_id = ? ORDER BY id ASC LIMIT ?",
+        """SELECT * FROM candidate_vocabulary_events
+           WHERE user_id = ?
+           ORDER BY created_at DESC, id DESC
+           LIMIT ?""",
         (user_id, limit),
     )
+    rows.reverse()
     for row in rows:
         row["candidate_items"] = from_json_text(row.get("candidate_items"), [])
         row["included_sidequest_signal_ids"] = from_json_text(
