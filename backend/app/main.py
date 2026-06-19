@@ -7,6 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.agent import get_settings as get_agent_settings
 from app.api.agent import router as agent_router
+from app.api.learning import router as learning_router
 from app.config import Settings, load_settings
 from app.database import database_is_initialized, init_database
 from app.llm.factory import create_llm_provider
@@ -43,6 +44,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         }
 
     app.include_router(agent_router)
+    app.include_router(learning_router)
 
     return app
 
