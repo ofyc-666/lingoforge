@@ -177,3 +177,31 @@ def test_agent_api_returns_stable_provider_error_without_internal_details():
     payload = response.json()
     assert payload["detail"]["code"] == "LLM_PROVIDER_ERROR"
     assert "secret provider traceback details" not in json.dumps(payload, ensure_ascii=False)
+
+
+def test_agent_api_missing_user_header_rejected():
+    """缺失身份头返回 422。"""
+    provider = ApiRecordingProvider([])
+    client, _db_path, _user_id, _other_user_id, _session_id = _client_with_provider(provider)
+
+    response = client.post(
+        "/api/agent/run",
+        json={"user_input": "读取画像"},
+    )
+    assert response.status_code == 422
+
+
+def test_agent_api_invalid_user_header_rejected():
+    """非法身份头（非整数）返回 422。"""
+    provider = ApiRecordingProvider([])
+    client, _db_path, user_id, _other_user_id, session_id = _client_with_provider(provider)
+
+    response = client.post(
+        "/api/agent/run",
+        headers={
+            "X-LingoForge-User-Id": "not_a_number",
+            "X-LingoForge-Session-Id": str(session_id),
+        },
+        json={"user_input": "读取画像"},
+    )
+    assert response.status_code == 422

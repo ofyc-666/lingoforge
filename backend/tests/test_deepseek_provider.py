@@ -9,6 +9,7 @@ from app.config import Settings
 from app.llm.deepseek_provider import (
     DeepSeekAuthenticationError,
     DeepSeekBadResponseError,
+    DeepSeekHTTPError,
     DeepSeekProvider,
     DeepSeekRateLimitError,
     DeepSeekTimeoutError,
@@ -163,3 +164,52 @@ def test_deepseek_provider_rejects_malformed_tool_arguments():
 
     with pytest.raises(DeepSeekBadResponseError):
         provider.generate([LLMMessage(role="user", content="hello")])
+
+
+class TestDeepSeekHTTPErrors:
+    """DeepSeek HTTP 错误映射测试。"""
+
+    def test_400_error_maps_to_http_error(self):
+        provider = _provider(lambda _request: httpx.Response(400, json={"error": "bad request"}))
+        with pytest.raises(DeepSeekHTTPError):
+            provider.generate([LLMMessage(role="user", content="hello")])
+
+    def test_500_error_maps_to_http_error(self):
+        provider = _provider(lambda _request: httpx.Response(500, text="internal error"))
+        with pytest.raises(DeepSeekHTTPError):
+            provider.generate([LLMMessage(role="user", content="hello")])
+
+
+class TestDeepSeekBadResponse:
+    """DeepSeek 坏响应格式映射测试。"""
+
+    def test_missing_choices_raises_bad_response(self):
+        provider = _provider(lambda _request: httpx.Response(200, json={"id": "empty", "model": "test"}))
+        with pytest.raises(DeepSeekBadResponseError):
+            provider.generate([LLMMessage(role="user", content="hello")])
+
+    def test_missing_message_in_choice_raises_bad_response(self):
+        provider = _provider(lambda _request: httpx.Response(
+            200,
+            json={"id": "test", "model": "test", "choices": [{"index": 0, "finish_reason": "stop"}]},
+        ))
+        with pytest.raises(DeepSeekBadResponseError):
+            provider.generate([LLMMessage(role="user", content="hello")])
+
+    def test_tool_calls_not_a_list_raises_bad_response(self):
+        provider = _provider(lambda _request: httpx.Response(
+            200,
+            json={
+                "id": "test", "model": "test",
+                "choices": [{"index": 0, "finish_reason": "tool_calls", "message": {
+                    "role": "assistant", "tool_calls": "not-a-list",
+                }}],
+            },
+        ))
+        with pytest.raises(DeepSeekBadResponseError):
+            provider.generate([LLMMessage(role="user", content="hello")])
+
+    def test_malformed_json_response_raises_bad_response(self):
+        provider = _provider(lambda _request: httpx.Response(200, content="not valid json}"))
+        with pytest.raises(DeepSeekBadResponseError):
+            provider.generate([LLMMessage(role="user", content="hello")])
