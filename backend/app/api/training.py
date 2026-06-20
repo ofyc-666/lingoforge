@@ -13,8 +13,10 @@ from app.constants import is_valid_workflow_stage
 from app.repositories.training import (
     create_training_session,
     get_latest_training_submission_evidence,
+    list_generated_tasks_for_session_user,
     list_training_sessions_for_user,
 )
+from app.repositories.base import fetch_one
 from app.services.training_submission import TrainingSubmissionError, submit_training_task
 from app.services.training_tasks import TrainingTaskAccessError, TrainingTaskNotFoundError, get_user_training_task
 
@@ -174,3 +176,82 @@ def list_sessions(
     """列出当前用户的训练会话，按 id DESC 排序，最多 20 条。"""
     sessions = list_training_sessions_for_user(settings.database_path, user_id)
     return ListSessionsResponse(sessions=sessions)
+
+
+# --------------- 训练任务读取端点 ---------------
+
+
+@router.get("/sessions/{session_id}/tasks", response_model=dict[str, Any])
+def list_session_tasks(
+    session_id: int,
+    user_id: int = Header(..., alias="X-LingoForge-User-Id"),
+    settings: Settings = Depends(get_settings),
+) -> dict[str, Any]:
+    """列出当前用户指定 session 下的训练任务。"""
+    session = fetch_one(
+        settings.database_path,
+        "SELECT * FROM training_sessions WHERE id = ?",
+        (session_id,),
+    )
+    if session is None:
+        raise HTTPException(status_code=404, detail={
+            "code": "SESSION_NOT_FOUND",
+            "message": f"训练会话 {session_id} 不存在。",
+            "details": {"session_id": session_id},
+        })
+    if session.get("user_id") != user_id:
+        raise HTTPException(status_code=403, detail={
+            "code": "SESSION_ACCESS_DENIED",
+            "message": f"无权访问训练会话 {session_id}。",
+            "details": {"session_id": session_id},
+        })
+
+    tasks = list_generated_tasks_for_session_user(
+        settings.database_path,
+        session_id=session_id,
+        user_id=user_id,
+    )
+    task_summaries = [
+        TrainingTaskSummary(
+            task_id=t["id"],
+            session_id=t["session_id"],
+            task_type=t["task_type"],
+            target_ability=t["target_ability"],
+            difficulty_params=t.get("difficulty_params", {}),
+            content=t.get("content_json", {}),
+            quality_check_result=t.get("quality_check_result", {}),
+            created_at=t.get("created_at", ""),
+        ).model_dump()
+        for t in tasks
+    ]
+    return {"tasks": task_summaries}
+
+
+@router.get("/tasks/{task_id}", response_model=TrainingTaskSummary)
+def get_task_detail(
+    task_id: int,
+    user_id: int = Header(..., alias="X-LingoForge-User-Id"),
+    settings: Settings = Depends(get_settings),
+) -> TrainingTaskSummary:
+    """读取单个训练任务详情。"""
+    try:
+        task = get_user_training_task(settings.database_path, user_id=user_id, task_id=task_id)
+    except TrainingTaskNotFoundError as exc:
+        raise HTTPException(status_code=404, detail={
+            "code": exc.code, "message": exc.message, "details": exc.details,
+        }) from exc
+    except TrainingTaskAccessError as exc:
+        raise HTTPException(status_code=403, detail={
+            "code": exc.code, "message": exc.message, "details": exc.details,
+        }) from exc
+
+    return TrainingTaskSummary(
+        task_id=task["id"],
+        session_id=task["session_id"],
+        task_type=task["task_type"],
+        target_ability=task["target_ability"],
+        difficulty_params=task.get("difficulty_params", {}),
+        content=task.get("content_json", {}),
+        quality_check_result=task.get("quality_check_result", {}),
+        created_at=task.get("created_at", ""),
+    )

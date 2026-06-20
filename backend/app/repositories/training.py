@@ -223,6 +223,26 @@ def get_generated_task_for_user(
     return row
 
 
+def list_generated_tasks_for_session_user(
+    database_path: str | Path,
+    *,
+    session_id: int,
+    user_id: int,
+) -> list[dict[str, Any]]:
+    """列出指定会话下、属于指定用户的生成任务。"""
+    rows = fetch_all(
+        database_path,
+        "SELECT * FROM generated_tasks WHERE session_id = ? AND user_id = ? ORDER BY id ASC",
+        (session_id, user_id),
+    )
+    for row in rows:
+        row["difficulty_params"] = from_json_text(row.get("difficulty_params"), {})
+        row["content_json"] = from_json_text(row.get("content_json"), {})
+        row["quality_requirements"] = from_json_text(row.get("quality_requirements"), {})
+        row["quality_check_result"] = from_json_text(row.get("quality_check_result"), {})
+    return rows
+
+
 def get_latest_training_submission_evidence(
     database_path: str | Path,
     *,
