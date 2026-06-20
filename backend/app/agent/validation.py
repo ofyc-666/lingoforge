@@ -89,3 +89,4 @@ class DecisionValidator:
         if not isinstance(normalized.get("decision_basis"), list):
             normalized["decision_basis"] = []
         return normalized
+

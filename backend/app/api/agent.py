@@ -11,7 +11,11 @@ from app.agent.workflow import AgentWorkflowError, run_text_training_workflow
 from app.config import Settings, load_settings
 from app.constants import _ABILITY_VALUES
 from app.llm.factory import create_llm_provider
+import logging
+
 from app.llm.provider import LLMProvider, LLMProviderError
+
+_logger = logging.getLogger(__name__)
 
 
 router = APIRouter(prefix="/api/agent", tags=["agent"])
@@ -131,11 +135,12 @@ def run_agent(
         result = runtime.run(context)
     except LLMProviderError as exc:
         code = getattr(exc, "code", "LLM_PROVIDER_ERROR")
+        _logger.error("Agent LLM 调用失败 [%s]: %s", code, exc)
         raise HTTPException(
             status_code=502,
             detail={
                 "code": str(code),
-                "message": "模型服务暂时不可用，请稍后重试。",
+                "message": f"模型服务暂时不可用（{code}）。详情请查看后端控制台日志。",
             },
         ) from exc
 
@@ -164,11 +169,12 @@ def run_text_training_agent_workflow(
         )
     except LLMProviderError as exc:
         code = getattr(exc, "code", "LLM_PROVIDER_ERROR")
+        _logger.error("Agent workflow LLM 调用失败 [%s]: %s", code, exc)
         raise HTTPException(
             status_code=502,
             detail={
                 "code": str(code),
-                "message": "模型服务暂时不可用，请稍后重试。",
+                "message": f"模型服务暂时不可用（{code}）。详情请查看后端控制台日志。",
             },
         ) from exc
     except AgentWorkflowError as exc:

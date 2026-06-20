@@ -114,7 +114,7 @@ Workflow 在某个阶段触发 Agent 时，构造逻辑请求：
   "session_id": 10,
   "workflow_stage": "SECOND_PLAN",
   "objective": "根据更新画像和副线待验证信号生成第二次主线计划",
-  "allowed_tools": ["get_user_profile", "get_candidate_vocabulary", "analyze_learning_history"],
+  "allowed_tools": ["get_user_profile", "analyze_learning_history"],
   "token_budget": 12000
 }
 ```
@@ -262,7 +262,6 @@ Skill 全文加载后才包含：
 MVP 中 Agent 可自主调用的 Function Calling 工具包括：
 
 - `get_user_profile`；
-- `get_candidate_vocabulary`；
 - `submit_profile_update_suggestion`；
 - `analyze_learning_history`。
 
@@ -288,7 +287,7 @@ Function Calling Loop 不变量：
 
 用户数据工具的身份绑定规则：
 
-- `get_user_profile`、`get_candidate_vocabulary`、`submit_profile_update_suggestion`、`analyze_learning_history` 等工具只能作用于 Runtime 注入的当前用户和当前 session；
+- `get_user_profile`、`submit_profile_update_suggestion`、`analyze_learning_history` 等工具只能作用于 Runtime 注入的当前用户和当前 session；
 - 模型只能声明工具业务意图和允许范围内的过滤条件，例如分析类型、目标能力、错误类型、词汇、时间窗口或分析目的；
 - 确定性工具必须强制绑定当前用户，校验 Workflow Stage、数据权限和隔离测试状态；
 - 如果模型传入 `user_id`、session ID、权限范围或试图扩大数据窗口，工具执行器必须忽略或拒绝该字段，并记录审计事件；

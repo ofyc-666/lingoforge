@@ -13,6 +13,8 @@ from app.api.learning import get_settings as get_learning_settings
 from app.api.learning import router as learning_router
 from app.api.profile import get_settings as get_profile_settings
 from app.api.profile import router as profile_router
+from app.api.reader import get_settings as get_reader_settings
+from app.api.reader import router as reader_router
 from app.api.sidequest import get_settings as get_sidequest_settings
 from app.api.sidequest import router as sidequest_router
 from app.api.training import get_settings as get_training_settings
@@ -36,13 +38,21 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         CORSMiddleware,
         allow_origins=list(app_settings.cors_origins),
         allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
+        allow_origin_regex=r"https?://(localhost|127\.0\.0\.1|\[::1\])(:\d+)?",
+        allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+        allow_headers=[
+            "Content-Type",
+            "Authorization",
+            "X-LingoForge-User-Id",
+            "X-LingoForge-Session-Id",
+        ],
+        expose_headers=["Content-Disposition"],
     )
     app.dependency_overrides[get_agent_settings] = lambda: app_settings
     app.dependency_overrides[get_isolated_settings] = lambda: app_settings
     app.dependency_overrides[get_learning_settings] = lambda: app_settings
     app.dependency_overrides[get_profile_settings] = lambda: app_settings
+    app.dependency_overrides[get_reader_settings] = lambda: app_settings
     app.dependency_overrides[get_sidequest_settings] = lambda: app_settings
     app.dependency_overrides[get_training_settings] = lambda: app_settings
 
@@ -61,6 +71,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(isolated_router)
     app.include_router(learning_router)
     app.include_router(profile_router)
+    app.include_router(reader_router)
     app.include_router(sidequest_router)
     app.include_router(training_router)
 

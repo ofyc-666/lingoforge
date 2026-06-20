@@ -84,6 +84,8 @@ class TaskType:
     TRANSFER_PRACTICE = "TRANSFER_PRACTICE"
     REMEDIATION = "REMEDIATION"
     SHORT_TRAINING = "SHORT_TRAINING"
+    VOCABULARY_LEARNING = "VOCABULARY_LEARNING"
+    VOCABULARY_REVIEW = "VOCABULARY_REVIEW"
 
 
 class EvidenceType:
@@ -120,6 +122,7 @@ class VocabSourceType:
     CET6_VOCAB = "CET6_VOCAB"
     SIDEQUEST_ENV = "SIDEQUEST_ENV"
     SEED_DEMO = "SEED_DEMO"
+    USER_READER = "USER_READER"
 
 
 class SnapshotSource:
@@ -138,6 +141,7 @@ class DecisionType:
     ERROR_ANALYSIS = "ERROR_ANALYSIS"
     REMEDIATION = "REMEDIATION"
     SECOND_PLAN = "SECOND_PLAN"
+    DAILY_LEARNING_PLAN = "DAILY_LEARNING_PLAN"
 
 
 class Confidence:
@@ -200,6 +204,8 @@ _TASK_TYPE_VALUES: frozenset[str] = frozenset({
     TaskType.TRANSFER_PRACTICE,
     TaskType.REMEDIATION,
     TaskType.SHORT_TRAINING,
+    TaskType.VOCABULARY_LEARNING,
+    TaskType.VOCABULARY_REVIEW,
 })
 
 _EVIDENCE_TYPE_VALUES: frozenset[str] = frozenset({
@@ -228,6 +234,7 @@ _VOCAB_SOURCE_TYPE_VALUES: frozenset[str] = frozenset({
     VocabSourceType.CET6_VOCAB,
     VocabSourceType.SIDEQUEST_ENV,
     VocabSourceType.SEED_DEMO,
+    VocabSourceType.USER_READER,
 })
 
 _SNAPSHOT_SOURCE_VALUES: frozenset[str] = frozenset({
@@ -242,6 +249,7 @@ _DECISION_TYPE_VALUES: frozenset[str] = frozenset({
     DecisionType.ERROR_ANALYSIS,
     DecisionType.REMEDIATION,
     DecisionType.SECOND_PLAN,
+    DecisionType.DAILY_LEARNING_PLAN,
 })
 
 _CONFIDENCE_VALUES: frozenset[str] = frozenset({
@@ -309,3 +317,4 @@ def is_valid_decision_type(value: Any) -> bool:
 
 def is_valid_confidence(value: Any) -> bool:
     return isinstance(value, str) and value in _CONFIDENCE_VALUES
+

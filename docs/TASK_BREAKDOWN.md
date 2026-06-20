@@ -376,31 +376,7 @@
 - 失败时回退方式：返回 `needs_initial_profile`，不伪造画像。
 - 完成后的汇报格式：说明输入输出、日志记录和测试结果。
 
-### D2. LLM 工具：`get_candidate_vocabulary`
-
-- 任务ID：`D2`
-- 执行者：`CODEX`
-- 目标：实现程序筛选候选词工具。
-- 前置依赖：`B3`、`C5`。
-- 允许修改的文件或目录：`backend/app/tools/`、`backend/tests/`。
-- 禁止修改范围：不让 Agent 自由选择数据库外词汇、不读取隔离题、不直接修改画像。
-- 输入：`user_id`、`workflow_stage`、`target_ability`、`include_sidequest_signals`。
-- 输出：候选词、来源、优先级、是否来自副线待验证信号、筛选原因。
-- 逐步实现步骤：
-  1. 定义输入输出模型；
-  2. 校验阶段合法；
-  3. 查询 CET-6 候选词；
-  4. 合并副线待验证信号；
-  5. 写入候选事件；
-  6. 写入工具调用日志。
-- 必须执行的命令：
-  - `python -m pytest backend/tests`
-- 测试要求：覆盖无候选词、非法阶段、副线信号参与候选。
-- 验收标准：副线信号只影响候选或待验证标记，不改正式画像。
-- 失败时回退方式：返回空候选列表和可解释原因。
-- 完成后的汇报格式：说明候选来源、边界和测试结果。
-
-### D3. LLM 工具：`submit_profile_update_suggestion`
+### D2. LLM 工具：`submit_profile_update_suggestion`
 
 - 任务ID：`D3`
 - 执行者：`CODEX`
@@ -584,7 +560,7 @@
 - 任务ID：`F2`
 - 执行者：`CODEX`
 - 目标：编写可审查的核心 Prompt 和阶段 Prompt。
-- 前置依赖：`F1`、`D1`、`D2`、`D3`、`E1` 至 `E4`。
+- 前置依赖：`F1`、`D1`、`D2`、`E1` 至 `E4`。
 - 允许修改的文件或目录：`backend/app/prompts/` 或 `prompts/`、`docs/` 中必要说明。
 - 禁止修改范围：不改变 MVP 范围；不允许 Prompt 绕过程序判分、证据记录、隔离题保护和画像校验。
 - 输入：Agent 职责、工具契约、Workflow 内部服务边界、Skill Registry。
@@ -662,8 +638,7 @@
 - 输出：目标能力、Skill、训练参数、训练任务草案、Agent 决策日志。
 - 逐步实现步骤：
   1. 调用 `get_user_profile`；
-  2. 调用 `get_candidate_vocabulary`；
-  3. 选择目标能力和 Skill；
+  2. 选择目标能力和 Skill；
   4. 决定难度、提示和题型参数；
   5. 生成训练任务并校验；
   6. 保存决策日志。
@@ -912,7 +887,6 @@
   1. 接通机场副线提交接口；
   2. 前端展示副线任务结果；
   3. 后端写入副线信号；
-  4. `get_candidate_vocabulary` 可引用副线信号；
   5. 测试副线不改画像。
 - 必须执行的命令：
   - `python -m pytest backend/tests`

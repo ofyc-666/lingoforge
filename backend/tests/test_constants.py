@@ -336,13 +336,15 @@ class TestVocabSourceType:
             VocabSourceType.CET6_VOCAB,
             VocabSourceType.SIDEQUEST_ENV,
             VocabSourceType.SEED_DEMO,
+            VocabSourceType.USER_READER,
         }
-        assert len(types) == 3
+        assert len(types) == 4
 
     def test_is_valid_vocab_source_type(self):
         assert is_valid_vocab_source_type("CET6_VOCAB")
         assert is_valid_vocab_source_type("SIDEQUEST_ENV")
         assert is_valid_vocab_source_type("SEED_DEMO")
+        assert is_valid_vocab_source_type("USER_READER")
 
     def test_is_valid_vocab_source_type_rejects_invalid(self):
         assert not is_valid_vocab_source_type("OTHER")

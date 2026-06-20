@@ -225,7 +225,6 @@ flowchart TD
 LLM 可调用工具：
 
 - `get_user_profile`；
-- `get_candidate_vocabulary`；
 - `submit_profile_update_suggestion`。
 
 验收：
@@ -329,7 +328,7 @@ Prompt 至少包括：
 
 验收：
 
-- Agent 至少调用 `get_user_profile` 和 `get_candidate_vocabulary`；
+- Agent 至少调用 `get_user_profile`；
 - 决策日志保存；
 - 前端能看到 Skill、能力和参数。
 

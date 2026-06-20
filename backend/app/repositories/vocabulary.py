@@ -30,6 +30,23 @@ def create_vocabulary_item(
     )
 
 
+def get_vocabulary_by_text(database_path: str | Path, text: str) -> dict[str, Any] | None:
+    """按文本查找词汇项（用于去重）。"""
+    row = fetch_one(database_path, "SELECT * FROM vocabulary_items WHERE text = ?", (text,))
+    if row is None:
+        return None
+    row["tags"] = from_json_text(row.get("tags"), [])
+    return row
+
+
+def list_all_vocabulary(database_path: str | Path) -> list[dict[str, Any]]:
+    """列出所有词汇项。"""
+    rows = fetch_all(database_path, "SELECT * FROM vocabulary_items ORDER BY id ASC")
+    for row in rows:
+        row["tags"] = from_json_text(row.get("tags"), [])
+    return rows
+
+
 def get_vocabulary_item(database_path: str | Path, item_id: int) -> dict[str, Any] | None:
     """按 ID 获取词汇项。"""
     row = fetch_one(database_path, "SELECT * FROM vocabulary_items WHERE id = ?", (item_id,))
