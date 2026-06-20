@@ -5,14 +5,18 @@ from __future__ import annotations
 import pytest
 from fastapi.testclient import TestClient
 
+from app.database import init_database
 from app.main import create_app
 from app.config import Settings
+from app.repositories.training import create_training_session
+from app.repositories.users import create_user
 from temp_paths import temp_db_path
 
 
 @pytest.fixture
 def client():
     db_path = str(temp_db_path("learning_api"))
+    init_database(db_path)
     settings = Settings(
         app_name="LingoForge Test",
         database_path=db_path,
@@ -102,3 +106,72 @@ class TestAnalyzeTextAPI:
         assert response.status_code == 200
         data = response.json()
         assert data["exercise"] is None
+
+
+class TestAnalyzeTextCreateTask:
+    """POST /api/learning/analyze-text/create-task 测试。"""
+
+    def test_正常分析并创建_task(self, client: TestClient) -> None:
+        db_path = _get_db_path(client)
+        uid = create_user(db_path, "分析任务测试用户")
+        sid = create_training_session(db_path, uid, stage="FIRST_MAIN")
+        resp = client.post(
+            "/api/learning/analyze-text/create-task",
+            json={
+                "raw_text": "Climate change is a pressing challenge for ecosystems worldwide.",
+                "target_abilities": ["VOCABULARY_CONTEXT"],
+                "max_keywords": 3,
+                "generate_exercise": True,
+            },
+            headers={
+                "X-LingoForge-User-Id": str(uid),
+                "X-LingoForge-Session-Id": str(sid),
+            },
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "analysis" in data
+        assert data["task_id"] >= 1
+        assert data["analysis"]["analysis_id"].startswith("analysis_")
+
+    def test_请求体含身份字段返回_422(self, client: TestClient) -> None:
+        db_path = _get_db_path(client)
+        uid = create_user(db_path, "身份测试用户2")
+        sid = create_training_session(db_path, uid, stage="FIRST_MAIN")
+        resp = client.post(
+            "/api/learning/analyze-text/create-task",
+            json={
+                "raw_text": "Hello world.",
+                "user_id": uid,
+            },
+            headers={
+                "X-LingoForge-User-Id": str(uid),
+                "X-LingoForge-Session-Id": str(sid),
+            },
+        )
+        assert resp.status_code == 422
+
+    def test_使用其他用户_session_返回_403(self, client: TestClient) -> None:
+        db_path = _get_db_path(client)
+        uid1 = create_user(db_path, "用户A2")
+        uid2 = create_user(db_path, "用户B2")
+        sid = create_training_session(db_path, uid2, stage="FIRST_MAIN")
+        resp = client.post(
+            "/api/learning/analyze-text/create-task",
+            json={
+                "raw_text": "Climate change is a pressing challenge.",
+                "target_abilities": ["VOCABULARY_CONTEXT"],
+            },
+            headers={
+                "X-LingoForge-User-Id": str(uid1),
+                "X-LingoForge-Session-Id": str(sid),
+            },
+        )
+        assert resp.status_code == 403
+
+
+def _get_db_path(client: TestClient) -> str:
+    """从 TestClient 获取数据库路径。"""
+    from app.api.training import get_settings as get_training_settings
+    settings = client.app.dependency_overrides[get_training_settings]()
+    return str(settings.database_path)

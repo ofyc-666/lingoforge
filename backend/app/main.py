@@ -7,6 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.agent import get_settings as get_agent_settings
 from app.api.agent import router as agent_router
+from app.api.learning import get_settings as get_learning_settings
 from app.api.learning import router as learning_router
 from app.api.profile import get_settings as get_profile_settings
 from app.api.profile import router as profile_router
@@ -35,6 +36,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         allow_headers=["*"],
     )
     app.dependency_overrides[get_agent_settings] = lambda: app_settings
+    app.dependency_overrides[get_learning_settings] = lambda: app_settings
     app.dependency_overrides[get_profile_settings] = lambda: app_settings
     app.dependency_overrides[get_training_settings] = lambda: app_settings
 
