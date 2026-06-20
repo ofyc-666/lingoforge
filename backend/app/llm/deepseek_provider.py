@@ -88,7 +88,10 @@ class DeepSeekProvider:
         if response.status_code == 429:
             raise DeepSeekRateLimitError("DeepSeek rate limit exceeded.")
         if response.status_code >= 400:
-            raise DeepSeekHTTPError(f"DeepSeek returned HTTP {response.status_code}.")
+            body_snippet = (response.text or "")[:300]
+            raise DeepSeekHTTPError(
+                f"DeepSeek returned HTTP {response.status_code}: {body_snippet}"
+            )
 
         try:
             data = response.json()
@@ -135,6 +138,18 @@ class DeepSeekProvider:
             if not message.tool_call_id:
                 raise DeepSeekBadResponseError("Tool message must include tool_call_id.")
             payload["tool_call_id"] = message.tool_call_id
+        if message.tool_calls:
+            payload["tool_calls"] = [
+                {
+                    "id": tc.id,
+                    "type": "function",
+                    "function": {
+                        "name": tc.name,
+                        "arguments": json.dumps(tc.arguments, ensure_ascii=False),
+                    },
+                }
+                for tc in message.tool_calls
+            ]
         return payload
 
     def _parse_response(self, data: dict[str, Any]) -> LLMResponse:

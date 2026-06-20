@@ -80,6 +80,7 @@ class AgentRuntime:
             messages.append(LLMMessage(
                 role="assistant",
                 content=active_response.content or "模型请求工具调用。",
+                tool_calls=active_response.tool_calls,
             ))
             executor = ToolExecutor(self.database_path, self.tool_registry, tool_result_cache)
             for tool_call in active_response.tool_calls:

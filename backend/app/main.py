@@ -38,8 +38,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         CORSMiddleware,
         allow_origins=list(app_settings.cors_origins),
         allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
+        allow_origin_regex=r"https?://(localhost|127\.0\.0\.1|\[::1\])(:\d+)?",
+        allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+        allow_headers=[
+            "Content-Type",
+            "Authorization",
+            "X-LingoForge-User-Id",
+            "X-LingoForge-Session-Id",
+        ],
+        expose_headers=["Content-Disposition"],
     )
     app.dependency_overrides[get_agent_settings] = lambda: app_settings
     app.dependency_overrides[get_isolated_settings] = lambda: app_settings

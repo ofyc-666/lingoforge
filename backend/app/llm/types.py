@@ -10,6 +10,7 @@ class LLMMessage:
     content: str
     name: str | None = None
     tool_call_id: str | None = None
+    tool_calls: tuple[LLMToolCall, ...] | None = None
 
 
 @dataclass(frozen=True)
