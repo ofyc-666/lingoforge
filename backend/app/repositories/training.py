@@ -49,6 +49,21 @@ def update_session_status(
         )
 
 
+def list_training_sessions_for_user(
+    database_path: str | Path,
+    user_id: int,
+    *,
+    limit: int = 20,
+) -> list[dict[str, Any]]:
+    """按用户 ID 查询训练会话列表，按 id DESC 排序，最多返回 limit 条。"""
+    rows = fetch_all(
+        database_path,
+        "SELECT * FROM training_sessions WHERE user_id = ? ORDER BY id DESC LIMIT ?",
+        (user_id, limit),
+    )
+    return rows
+
+
 # --------------- 生成任务 ---------------
 
 def create_generated_task(

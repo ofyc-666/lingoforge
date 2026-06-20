@@ -5,14 +5,53 @@ from __future__ import annotations
 from typing import Any
 
 from fastapi import APIRouter, Depends, Header, HTTPException
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.api.training_models import TrainingSubmitRequest, TrainingSubmitResponse, TrainingResultResponse, TrainingTaskSummary
 from app.config import Settings, load_settings
-from app.repositories.training import get_latest_training_submission_evidence
+from app.constants import is_valid_workflow_stage
+from app.repositories.training import (
+    create_training_session,
+    get_latest_training_submission_evidence,
+    list_training_sessions_for_user,
+)
 from app.services.training_submission import TrainingSubmissionError, submit_training_task
 from app.services.training_tasks import TrainingTaskAccessError, TrainingTaskNotFoundError, get_user_training_task
 
 router = APIRouter(prefix="/api/training", tags=["training"])
+
+
+# --------------- 会话模型 ---------------
+
+
+class CreateSessionRequest(BaseModel):
+    """创建训练会话请求体。身份来自请求头。"""
+
+    model_config = ConfigDict(extra="forbid")
+
+    stage: str = Field(..., min_length=1)
+
+    @field_validator("stage")
+    @classmethod
+    def _validate_stage(cls, value: str) -> str:
+        if not is_valid_workflow_stage(value):
+            raise ValueError(f"stage 必须是合法的 WorkflowStage: {sorted(['DIAGNOSTIC','FIRST_MAIN','SIDEQUEST','SECOND_PLAN','SHORT_TRAINING','ISOLATED_TEST'])}")
+        return value
+
+
+class CreateSessionResponse(BaseModel):
+    """创建训练会话响应体。"""
+
+    session_id: int
+    user_id: int
+    stage: str
+    status: str
+
+
+class ListSessionsResponse(BaseModel):
+    """训练会话列表响应体。"""
+
+    sessions: list[dict[str, Any]]
 
 
 def get_settings() -> Settings:
@@ -101,3 +140,37 @@ def get_task_result(
         }
 
     return TrainingResultResponse(task=task_summary, latest_submission=latest_submission)
+
+
+# --------------- 训练会话端点 ---------------
+
+
+@router.post("/sessions", response_model=CreateSessionResponse)
+def create_session(
+    request: CreateSessionRequest,
+    user_id: int = Header(..., alias="X-LingoForge-User-Id"),
+    settings: Settings = Depends(get_settings),
+) -> CreateSessionResponse:
+    """创建训练会话，状态为 IN_PROGRESS。"""
+    session_id = create_training_session(
+        settings.database_path,
+        user_id=user_id,
+        stage=request.stage,
+        status="IN_PROGRESS",
+    )
+    return CreateSessionResponse(
+        session_id=session_id,
+        user_id=user_id,
+        stage=request.stage,
+        status="IN_PROGRESS",
+    )
+
+
+@router.get("/sessions", response_model=ListSessionsResponse)
+def list_sessions(
+    user_id: int = Header(..., alias="X-LingoForge-User-Id"),
+    settings: Settings = Depends(get_settings),
+) -> ListSessionsResponse:
+    """列出当前用户的训练会话，按 id DESC 排序，最多 20 条。"""
+    sessions = list_training_sessions_for_user(settings.database_path, user_id)
+    return ListSessionsResponse(sessions=sessions)
