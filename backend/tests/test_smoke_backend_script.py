@@ -18,7 +18,7 @@ def _run_smoke() -> subprocess.CompletedProcess[str]:
 
 
 class TestSmokeBackendScript:
-    """后��� smoke 脚本测试。"""
+    """后端 smoke 脚本测试。"""
 
     def test_smoke_script_exits_zero(self):
         result = _run_smoke()
@@ -26,6 +26,35 @@ class TestSmokeBackendScript:
             f"smoke 脚本退出码 {result.returncode}\nstdout:\n{result.stdout}\nstderr:\n{result.stderr}"
         )
 
-    def test_smoke_script_output_mentions_health(self):
+    def test_smoke_output_contains_health(self):
         result = _run_smoke()
         assert "health" in result.stdout.lower()
+
+    def test_smoke_output_contains_profile(self):
+        result = _run_smoke()
+        assert "profile" in result.stdout.lower()
+
+    def test_smoke_output_contains_isolated(self):
+        result = _run_smoke()
+        assert "isolated" in result.stdout.lower()
+
+    def test_smoke_output_contains_sidequest(self):
+        result = _run_smoke()
+        assert "sidequest" in result.stdout.lower() or "副线" in result.stdout
+
+    def test_smoke_output_contains_learning(self):
+        result = _run_smoke()
+        assert "learning" in result.stdout.lower() or "create-task" in result.stdout.lower()
+
+    def test_smoke_output_contains_training(self):
+        result = _run_smoke()
+        assert "training" in result.stdout.lower() or "训练" in result.stdout
+
+    def test_smoke_output_contains_passing_marker(self):
+        result = _run_smoke()
+        assert "通过" in result.stdout or "全部通过" in result.stdout or "OK" in result.stdout
+
+    def test_no_api_key_leaked(self):
+        result = _run_smoke()
+        assert "sk-" not in result.stdout
+        assert "sk-" not in result.stderr
