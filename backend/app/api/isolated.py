@@ -55,6 +55,18 @@ def start_test(
                 f"没有可用的 {ability} 隔离测试题。",
                 {"target_ability": ability},
             ) from exc
+        if msg == "SESSION_NOT_FOUND":
+            raise business_error(
+                404, "SESSION_NOT_FOUND",
+                f"训练会话 {session_id} 不存在。",
+                {"session_id": session_id},
+            ) from exc
+        if msg == "SESSION_ACCESS_DENIED":
+            raise business_error(
+                403, "SESSION_ACCESS_DENIED",
+                f"无权使用训练会话 {session_id}。",
+                {"session_id": session_id},
+            ) from exc
         raise
 
     return IsolatedTestStartResponse(

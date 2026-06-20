@@ -35,7 +35,7 @@ class AgentRuntime:
         self.database_path = database_path
         self.provider = provider
         self.tool_registry = tool_registry or create_default_tool_registry(database_path)
-        self.context_builder = context_builder or ContextBuilder()
+        self.context_builder = context_builder or ContextBuilder(database_path)
         self.decision_validator = decision_validator or DecisionValidator()
         self.timeout_seconds = timeout_seconds
 
@@ -45,6 +45,7 @@ class AgentRuntime:
         manifest = build_result.manifest
         messages = self.context_builder.build_messages(build_result.context_pack)
         tool_specs = self.tool_registry.specs_for(context.allowed_tools)
+        tool_result_cache: dict[str, dict[str, Any]] = {}
 
         first_response = self.provider.generate(
             messages,
@@ -53,14 +54,35 @@ class AgentRuntime:
         )
 
         tool_results: list[dict[str, Any]] = []
-        final_response = first_response
-        if first_response.tool_calls:
+        active_response = first_response
+        expansion_request = self.context_builder.parse_context_expansion_request(first_response.content)
+        if expansion_request is not None and not first_response.tool_calls:
+            messages.append(LLMMessage(role="assistant", content=first_response.content))
+            expansion_pack = self.context_builder.expand_context(
+                run_id,
+                context,
+                manifest,
+                expansion_request,
+                tool_result_cache,
+            )
+            messages.append(LLMMessage(
+                role="user",
+                content=_stable_json({"context_expansion_result": expansion_pack}),
+            ))
+            active_response = self.provider.generate(
+                messages,
+                tools=tool_specs,
+                timeout_seconds=self.timeout_seconds,
+            )
+
+        final_response = active_response
+        if active_response.tool_calls:
             messages.append(LLMMessage(
                 role="assistant",
-                content=first_response.content or "模型请求工具调用。",
+                content=active_response.content or "模型请求工具调用。",
             ))
-            executor = ToolExecutor(self.database_path, self.tool_registry)
-            for tool_call in first_response.tool_calls:
+            executor = ToolExecutor(self.database_path, self.tool_registry, tool_result_cache)
+            for tool_call in active_response.tool_calls:
                 tool_result = executor.execute(context, tool_call)
                 tool_results.append(tool_result)
                 self.context_builder.record_tool_result(manifest, tool_result)

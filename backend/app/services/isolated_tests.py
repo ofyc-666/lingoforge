@@ -16,6 +16,7 @@ from app.repositories.isolated_tests import (
     get_items_for_attempt,
     list_active_items_by_ability,
 )
+from app.repositories.base import fetch_one
 from app.repositories.training import create_learning_evidence
 
 
@@ -59,6 +60,17 @@ def start_isolated_test(
         {"attempt_id": int, "items": [...]}
     """
     # 按 target_ability 读取 active items
+    if session_id is not None:
+        session = fetch_one(
+            database_path,
+            "SELECT id, user_id FROM training_sessions WHERE id = ?",
+            (session_id,),
+        )
+        if session is None:
+            raise ValueError("SESSION_NOT_FOUND")
+        if session.get("user_id") != user_id:
+            raise ValueError("SESSION_ACCESS_DENIED")
+
     active_items = list_active_items_by_ability(database_path, target_ability)
     selected = active_items[:limit]
 

@@ -14,6 +14,7 @@ from app.config import Settings
 from app.database import init_database
 from app.main import create_app
 from app.repositories.isolated_tests import create_isolated_test_item
+from app.repositories.training import create_training_session
 from app.repositories.users import create_user
 from temp_paths import temp_db_path
 
@@ -106,6 +107,30 @@ class TestIsolatedStart:
             headers={"X-LingoForge-User-Id": str(uid)},
         )
         assert resp.status_code == 400
+
+
+    def test_不能绑定其他用户_session(self, client: TestClient, db_path: str) -> None:
+        uid = create_user(db_path, "隔离用户")
+        other_uid = create_user(db_path, "其他 session 用户")
+        other_session_id = create_training_session(
+            db_path,
+            user_id=other_uid,
+            stage="ISOLATED_TEST",
+            status="IN_PROGRESS",
+        )
+        _create_active_item(db_path)
+
+        resp = client.post(
+            "/api/isolated-tests/start",
+            json={"target_ability": "VOCABULARY_CONTEXT", "limit": 1},
+            headers={
+                "X-LingoForge-User-Id": str(uid),
+                "X-LingoForge-Session-Id": str(other_session_id),
+            },
+        )
+
+        assert resp.status_code == 403
+        assert resp.json()["detail"]["code"] == "SESSION_ACCESS_DENIED"
 
 
 class TestIsolatedSubmit:
