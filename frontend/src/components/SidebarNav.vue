@@ -6,6 +6,7 @@ const route = useRoute()
 
 const navItems = [
   { path: '/', label: '今日学习', icon: '📅' },
+  { path: '/reader', label: '阅读导入', icon: '📄' },
   { path: '/training', label: '开始训练', icon: '📝' },
   { path: '/history', label: '学习记录', icon: '📊' },
   { path: '/profile', label: '能力画像', icon: '👤' },

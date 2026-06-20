@@ -12,6 +12,11 @@ const routes = [
     component: () => import('../views/TrainingView.vue'),
   },
   {
+    path: '/reader',
+    name: 'reader',
+    component: () => import('../views/ReaderView.vue'),
+  },
+  {
     path: '/training/:taskId/result',
     name: 'training-result',
     component: () => import('../views/TrainingResultView.vue'),

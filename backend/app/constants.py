@@ -122,6 +122,7 @@ class VocabSourceType:
     CET6_VOCAB = "CET6_VOCAB"
     SIDEQUEST_ENV = "SIDEQUEST_ENV"
     SEED_DEMO = "SEED_DEMO"
+    USER_READER = "USER_READER"
 
 
 class SnapshotSource:
@@ -233,6 +234,7 @@ _VOCAB_SOURCE_TYPE_VALUES: frozenset[str] = frozenset({
     VocabSourceType.CET6_VOCAB,
     VocabSourceType.SIDEQUEST_ENV,
     VocabSourceType.SEED_DEMO,
+    VocabSourceType.USER_READER,
 })
 
 _SNAPSHOT_SOURCE_VALUES: frozenset[str] = frozenset({
@@ -315,5 +317,4 @@ def is_valid_decision_type(value: Any) -> bool:
 
 def is_valid_confidence(value: Any) -> bool:
     return isinstance(value, str) and value in _CONFIDENCE_VALUES
-
 

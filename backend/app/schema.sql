@@ -51,6 +51,29 @@ CREATE TABLE IF NOT EXISTS vocabulary_items (
 CREATE UNIQUE INDEX IF NOT EXISTS idx_vocabulary_items_text
   ON vocabulary_items(text);
 
+CREATE TABLE IF NOT EXISTS reading_documents (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  source_type TEXT NOT NULL,
+  file_name TEXT,
+  raw_text TEXT NOT NULL,
+  analysis_json TEXT NOT NULL DEFAULT '{}',
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS user_vocabulary_items (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  vocabulary_item_id INTEGER NOT NULL REFERENCES vocabulary_items(id) ON DELETE CASCADE,
+  meaning_zh TEXT,
+  usage_note TEXT NOT NULL DEFAULT '',
+  ability TEXT,
+  source_document_id INTEGER REFERENCES reading_documents(id) ON DELETE SET NULL,
+  source_context TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE(user_id, vocabulary_item_id)
+);
+
 CREATE TABLE IF NOT EXISTS candidate_vocabulary_events (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -197,4 +220,3 @@ CREATE TABLE IF NOT EXISTS agent_decision_logs (
   evidence_refs TEXT NOT NULL DEFAULT '[]',
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
-

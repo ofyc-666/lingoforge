@@ -53,20 +53,24 @@ async function request(method, path, body = null) {
   }
 
   if (!response.ok) {
-    let detail = {}
-    try {
-      const json = await response.json()
-      detail = json.detail || json
-    } catch (_) {
-      // 非 JSON 响应
-    }
-    const code = detail.code || `HTTP_${response.status}`
-    const message = detail.message || `请求失败（${response.status}）`
-    const details = detail.details || {}
-    throw new ApiError(code, message, details)
+    throw await errorFromResponse(response, `请求失败（${response.status}）`)
   }
 
   return response.json()
+}
+
+async function errorFromResponse(response, fallbackMessage) {
+  let detail = {}
+  try {
+    const json = await response.json()
+    detail = json.detail || json
+  } catch (_) {
+    // 非 JSON 响应
+  }
+  const code = detail.code || `HTTP_${response.status}`
+  const message = detail.message || fallbackMessage
+  const details = detail.details || {}
+  return new ApiError(code, message, details)
 }
 
 // ---- 自定义错误 ----
@@ -114,6 +118,35 @@ export function analyzeText(data) {
 
 export function analyzeTextAndCreateTask(data) {
   return request('POST', '/api/learning/analyze-text/create-task', data)
+}
+
+// ---- 阅读导入与词汇本 ----
+
+export function importReaderText(data) {
+  return request('POST', '/api/reader/import-text', data)
+}
+
+export function importReaderPdf(data) {
+  return request('POST', '/api/reader/import-pdf', data)
+}
+
+export function addReaderVocabulary(data) {
+  return request('POST', '/api/reader/vocabulary', data)
+}
+
+export function listReaderVocabulary() {
+  return request('GET', '/api/reader/vocabulary')
+}
+
+export async function downloadReaderVocabularyCsv() {
+  const response = await fetch(`${API_BASE_URL}/api/reader/vocabulary/export.csv`, {
+    method: 'GET',
+    headers: authHeaders(),
+  })
+  if (!response.ok) {
+    throw await errorFromResponse(response, `导出失败（${response.status}）`)
+  }
+  return response.blob()
 }
 
 // ---- 训练任务 ----
