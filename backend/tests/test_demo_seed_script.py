@@ -71,6 +71,17 @@ class TestDemoSeedScript:
         r2 = _run_seed(db_path)
         assert r2.returncode == 0, f"第二次运行失败:\n{r2.stderr}"
 
+    def test_active_isolated_items_count(self):
+        """active isolated items 至少 2 条。"""
+        db_path = str(temp_db_path("demo_isolated"))
+        init_database(db_path)
+
+        result = _run_seed(db_path)
+        assert result.returncode == 0, f"seed 失败:\n{result.stderr}"
+
+        items = fetch_all(db_path, "SELECT * FROM isolated_test_items WHERE is_active = 1")
+        assert len(items) >= 2, f"active isolated items 数量不足: {len(items)}"
+
     def test_no_real_api_key_in_output(self):
         db_path = str(temp_db_path("demo_nokey"))
         init_database(db_path)

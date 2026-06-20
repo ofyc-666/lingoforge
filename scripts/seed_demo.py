@@ -16,6 +16,8 @@ _BACKEND = _HERE.parent / "backend"
 sys.path.insert(0, str(_BACKEND))
 
 from app.database import init_database
+from app.repositories.isolated_tests import create_isolated_test_item
+from app.repositories.sidequest import create_sidequest_run, create_sidequest_signal
 from app.repositories.training import create_generated_task, create_training_session
 from app.repositories.users import create_profile_snapshot, create_user, save_user_goal
 from app.repositories.vocabulary import create_vocabulary_item
@@ -157,12 +159,97 @@ def seed(database_path: str) -> None:
     )
     print(f"训练任务: task_id={task_id}")
 
+    # 7. 创建隔离测试题（active items >= 2）
+    isolated_items = [
+        {
+            "target_ability": "VOCABULARY_CONTEXT",
+            "item_payload": {
+                "prompt": '"climate" 在原文中最接近哪一项？',
+                "options": [
+                    {"id": "A", "text": "气候"},
+                    {"id": "B", "text": "环境"},
+                    {"id": "C", "text": "变化"},
+                    {"id": "D", "text": "温度"},
+                ],
+            },
+            "answer_key": {"correct": "A"},
+            "answer_rationale": {"A": "climate 意为气候"},
+            "distractor_rationale": {"B": "环境更接近 environment", "C": "变化是 change", "D": "温度是 temperature"},
+        },
+        {
+            "target_ability": "VOCABULARY_CONTEXT",
+            "item_payload": {
+                "prompt": '"ecosystems" 在原文中最接近哪一项？',
+                "options": [
+                    {"id": "A", "text": "经济系统"},
+                    {"id": "B", "text": "生态系统"},
+                    {"id": "C", "text": "操作系统"},
+                    {"id": "D", "text": "社会制度"},
+                ],
+            },
+            "answer_key": {"correct": "B"},
+            "answer_rationale": {"B": "ecosystems 意为生态系统"},
+            "distractor_rationale": {"A": "经济是 economy", "C": "操作系统是 operating system", "D": "社会制度是 social system"},
+        },
+        {
+            "target_ability": "VOCABULARY_CONTEXT",
+            "item_payload": {
+                "prompt": '"sustainable" 在原文中最接近哪一项？',
+                "options": [
+                    {"id": "A", "text": "快速的"},
+                    {"id": "B", "text": "复杂的"},
+                    {"id": "C", "text": "可持续的"},
+                    {"id": "D", "text": "临时的"},
+                ],
+            },
+            "answer_key": {"correct": "C"},
+            "answer_rationale": {"C": "sustainable 意为可持续的"},
+            "distractor_rationale": {"A": "快速的是 fast", "B": "复杂的是 complex", "D": "临时的是 temporary"},
+        },
+    ]
+    for i, item_data in enumerate(isolated_items):
+        iid = create_isolated_test_item(
+            database_path,
+            target_ability=item_data["target_ability"],
+            item_version="v1",
+            item_payload=item_data["item_payload"],
+            answer_key=item_data["answer_key"],
+            answer_rationale=item_data["answer_rationale"],
+            distractor_rationale=item_data["distractor_rationale"],
+            is_active=True,
+        )
+        print(f"隔离题 {i + 1}: item_id={iid}")
+    print(f"隔离测试题: 已创建 {len(isolated_items)} 道 active 题")
+
+    # 8. 创建副线 seed 数据
+    sq_run_id = create_sidequest_run(
+        database_path,
+        user_id=user_id,
+        task_name="AIRPORT_TICKET_PURCHASE",
+        objective={"scene": "AIRPORT_TICKET", "expression": "I'd like to book a flight."},
+        result={"completed": True},
+    )
+    sq_signal_id = create_sidequest_signal(
+        database_path,
+        user_id=user_id,
+        sidequest_run_id=sq_run_id,
+        scene="AIRPORT_TICKET",
+        signal_type="TASK_SUCCESS",
+        expression_text="I'd like to book a flight.",
+        context_json={"scene": "AIRPORT_TICKET"},
+    )
+    print(f"副线运行: sidequest_run_id={sq_run_id}")
+    print(f"副线信号: signal_id={sq_signal_id}")
+
     print()
     print("===== Demo 数据摘要 =====")
     print(f"  user_id:    {user_id}")
     print(f"  session_id: {session_id}")
     print(f"  task_id:    {task_id}")
     print(f"  词汇数:     {len(vocab_ids)}")
+    print(f"  隔离题数:   {len(isolated_items)}")
+    print(f"  副线运行:   {sq_run_id}")
+    print(f"  副线信号:   {sq_signal_id}")
     print("=========================")
     print("Demo 数据创建完成，可用于本地开发和测试。")
 
