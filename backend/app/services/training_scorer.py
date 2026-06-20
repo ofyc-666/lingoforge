@@ -9,6 +9,15 @@ from __future__ import annotations
 from typing import Any
 
 
+class UnsupportedQuestionTypeError(ValueError):
+    """训练评分器遇到 MVP 不支持的题型。"""
+
+    def __init__(self, question_id: str, question_type: Any):
+        self.question_id = question_id
+        self.question_type = question_type
+        super().__init__(f"Unsupported question_type for {question_id}: {question_type}")
+
+
 def score_training_submission(
     task_content: dict[str, Any],
     answers: list[dict[str, Any]],
@@ -40,6 +49,9 @@ def score_training_submission(
     question_map: dict[str, dict[str, Any]] = {}
     for q in questions:
         qid = q.get("question_id", "")
+        question_type = q.get("question_type")
+        if question_type != "MULTIPLE_CHOICE":
+            raise UnsupportedQuestionTypeError(qid, question_type)
         if qid:
             question_map[qid] = q
 

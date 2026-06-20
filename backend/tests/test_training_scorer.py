@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from app.services.training_scorer import score_training_submission
+import pytest
+
+from app.services.training_scorer import UnsupportedQuestionTypeError, score_training_submission
 
 
 def _make_task_content(*questions: dict) -> dict:
@@ -131,3 +133,17 @@ class TestUsedHints:
         answers = [_a("q1", "B")]
         result = score_training_submission(task, answers)
         assert result["used_hints"] == []
+
+
+class TestUnsupportedQuestionType:
+    def test_unsupported_question_type_rejected(self):
+        task = _make_task_content({
+            "question_id": "q1",
+            "question_type": "ESSAY",
+            "answer": "A",
+            "target_ability": "VOCABULARY_CONTEXT",
+        })
+        with pytest.raises(UnsupportedQuestionTypeError) as exc:
+            score_training_submission(task, [_a("q1", "A")])
+        assert exc.value.question_id == "q1"
+        assert exc.value.question_type == "ESSAY"

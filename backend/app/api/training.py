@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException
 
 from app.api.training_models import TrainingSubmitRequest, TrainingSubmitResponse, TrainingResultResponse, TrainingTaskSummary
 from app.config import Settings, load_settings
-from app.repositories.training import get_learning_evidence_by_task
+from app.repositories.training import get_latest_training_submission_evidence
 from app.services.training_submission import TrainingSubmissionError, submit_training_task
 from app.services.training_tasks import TrainingTaskAccessError, TrainingTaskNotFoundError, get_user_training_task
 
@@ -77,10 +77,9 @@ def get_task_result(
     )
 
     # 查询最新提交
-    evidence_list = get_learning_evidence_by_task(settings.database_path, task_id)
+    latest_evidence = get_latest_training_submission_evidence(settings.database_path, task_id=task_id)
     latest_submission: dict[str, Any] | None = None
-    if evidence_list:
-        latest_evidence = evidence_list[-1]
+    if latest_evidence is not None:
         payload = latest_evidence.get("payload_json", {})
         score = payload.get("score", {})
         # 查找关联的画像建议

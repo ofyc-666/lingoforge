@@ -57,19 +57,43 @@ class TestTrainingQuestion:
         )
         assert q.error_type_on_wrong is None
 
-    def test_non_multiple_choice_question_type_accepted_in_model(self):
+    def test_non_multiple_choice_question_type_rejected(self):
         """模型层面不校验 question_type 枚举——该校验在评分器或 Service 层。
         模型只做结构约束。"""
-        q = TrainingQuestion(
-            question_id="q3",
-            question_type="ESSAY",
-            prompt="Write something.",
-            options=[TrainingOption(id="A", text="X")],
-            answer="A",
-            explanation="test",
-            target_ability="VOCABULARY_CONTEXT",
-        )
-        assert q.question_type == "ESSAY"
+        with pytest.raises(ValidationError):
+            TrainingQuestion(
+                question_id="q3",
+                question_type="ESSAY",
+                prompt="Write something.",
+                options=[TrainingOption(id="A", text="X"), TrainingOption(id="B", text="Y")],
+                answer="A",
+                explanation="test",
+                target_ability="VOCABULARY_CONTEXT",
+            )
+
+    def test_single_option_rejected(self):
+        with pytest.raises(ValidationError):
+            TrainingQuestion(
+                question_id="q4",
+                question_type="MULTIPLE_CHOICE",
+                prompt="Choose one.",
+                options=[TrainingOption(id="A", text="X")],
+                answer="A",
+                explanation="test",
+                target_ability="VOCABULARY_CONTEXT",
+            )
+
+    def test_invalid_target_ability_rejected(self):
+        with pytest.raises(ValidationError):
+            TrainingQuestion(
+                question_id="q5",
+                question_type="MULTIPLE_CHOICE",
+                prompt="Choose one.",
+                options=[TrainingOption(id="A", text="X"), TrainingOption(id="B", text="Y")],
+                answer="A",
+                explanation="test",
+                target_ability="INVALID_ABILITY",
+            )
 
 
 class TestTrainingTaskContent:
@@ -140,6 +164,18 @@ class TestTrainingSubmitRequest:
             TrainingSubmitRequest(
                 answers=[TrainingAnswer(question_id="q1", answer="A")],
                 session_id=1,  # type: ignore[call-arg]
+            )
+
+    def test_identity_field_inside_answer_rejected(self):
+        with pytest.raises(ValidationError):
+            TrainingSubmitRequest(
+                answers=[
+                    {
+                        "question_id": "q1",
+                        "answer": "A",
+                        "user_id": 999,
+                    }
+                ]
             )
 
     def test_with_optional_fields(self):

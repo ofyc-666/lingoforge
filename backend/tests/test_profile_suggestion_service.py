@@ -97,6 +97,34 @@ class TestProposeProfileUpdate:
         suggestions = get_user_profile_suggestions(db_path, user_id)
         assert suggestions[0]["direction"] == "UNCERTAIN"
 
+    def test_missing_target_ability_generates_uncertain(self, db_path, user_id):
+        score = {
+            "total": 1,
+            "correct": 1,
+            "accuracy": 1.0,
+            "passed": True,
+            "question_results": [
+                {
+                    "question_id": "q1",
+                    "user_answer": "A",
+                    "standard_answer": "A",
+                    "is_correct": True,
+                    "error_type": None,
+                    "explanation": "",
+                }
+            ],
+            "error_types": [],
+            "used_hints": [],
+        }
+        propose_profile_update_from_score(
+            db_path,
+            user_id=user_id,
+            evidence_id=104,
+            score_result=score,
+        )
+        suggestions = get_user_profile_suggestions(db_path, user_id)
+        assert suggestions[0]["direction"] == "UNCERTAIN"
+
     def test_does_not_write_profile_snapshot(self, db_path, user_id):
         score = _score(3, 2)
         propose_profile_update_from_score(

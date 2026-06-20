@@ -80,6 +80,17 @@ class TestKeywordAnalysis:
         assert kw.meaning_zh == "适应"
 
 
+    def test_invalid_keyword_ability_rejected(self):
+        with pytest.raises(ValidationError):
+            KeywordAnalysis(
+                text="adapt",
+                meaning_zh="适应",
+                usage_note="",
+                ability="INVALID_ABILITY",
+                selection_reason="test",
+            )
+
+
 class TestExerciseOption:
     """ExerciseOption 模型测试。"""
 
@@ -104,6 +115,31 @@ class TestExerciseQuestion:
         )
         assert q.question_id == "q1"
         assert len(q.options) == 2
+
+
+    def test_non_multiple_choice_question_type_rejected(self):
+        with pytest.raises(ValidationError):
+            ExerciseQuestion(
+                question_id="q2",
+                question_type="ESSAY",
+                prompt="Write something.",
+                options=[ExerciseOption(id="A", text="yes"), ExerciseOption(id="B", text="no")],
+                answer="A",
+                explanation="test",
+                target_ability="VOCABULARY_CONTEXT",
+            )
+
+    def test_invalid_target_ability_rejected(self):
+        with pytest.raises(ValidationError):
+            ExerciseQuestion(
+                question_id="q3",
+                question_type="MULTIPLE_CHOICE",
+                prompt="Choose one.",
+                options=[ExerciseOption(id="A", text="yes"), ExerciseOption(id="B", text="no")],
+                answer="A",
+                explanation="test",
+                target_ability="INVALID_ABILITY",
+            )
 
 
 class TestTextAnalysisResponse:

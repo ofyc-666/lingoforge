@@ -7,12 +7,15 @@
 
 from __future__ import annotations
 
+from contextlib import closing
 from pathlib import Path
 from typing import Any
 
-from app.services.learning_evidence import record_training_submission_evidence
-from app.services.profile_suggestions import propose_profile_update_from_score
-from app.services.training_scorer import score_training_submission
+from app.database import connect
+from app.services.learning_evidence import build_training_submission_evidence_payload
+from app.services.profile_suggestions import build_profile_suggestion_from_score
+from app.services.training_scorer import UnsupportedQuestionTypeError, score_training_submission
+from app.storage.json_fields import to_json_text
 from app.services.training_tasks import (
     TrainingTaskAccessError,
     TrainingTaskNotFoundError,
@@ -28,6 +31,68 @@ class TrainingSubmissionError(Exception):
         self.message = message
         self.details = details or {}
         super().__init__(message)
+
+
+def _write_submission_artifacts_atomically(
+    database_path: str | Path,
+    *,
+    user_id: int,
+    session_id: int,
+    task_id: int,
+    answers: list[dict[str, Any]],
+    score_result: dict[str, Any],
+    time_spent_seconds: int | None,
+    used_hints: list[str] | None,
+) -> tuple[int, int]:
+    """同一事务写入学习证据和画像建议，避免部分写入。"""
+    evidence_payload = build_training_submission_evidence_payload(
+        session_id=session_id,
+        task_id=task_id,
+        answers=answers,
+        score_result=score_result,
+        time_spent_seconds=time_spent_seconds,
+        used_hints=used_hints,
+    )
+
+    with closing(connect(database_path)) as conn:
+        try:
+            evidence_cursor = conn.execute(
+                """INSERT INTO learning_evidence
+                   (user_id, session_id, task_id, evidence_type, payload_json)
+                   VALUES (?, ?, ?, ?, ?)""",
+                (
+                    user_id,
+                    session_id,
+                    task_id,
+                    "TRAINING_ANSWER",
+                    to_json_text(evidence_payload),
+                ),
+            )
+            evidence_id = int(evidence_cursor.lastrowid)
+
+            suggestion = build_profile_suggestion_from_score(
+                evidence_id=evidence_id,
+                score_result=score_result,
+            )
+            suggestion_cursor = conn.execute(
+                """INSERT INTO profile_update_suggestions
+                   (user_id, ability, direction, reason, evidence_refs, agent_payload)
+                   VALUES (?, ?, ?, ?, ?, ?)""",
+                (
+                    user_id,
+                    suggestion["ability"],
+                    suggestion["direction"],
+                    suggestion["reason"],
+                    to_json_text(suggestion["evidence_refs"]),
+                    to_json_text(suggestion["agent_payload"]),
+                ),
+            )
+            profile_suggestion_id = int(suggestion_cursor.lastrowid)
+            conn.commit()
+            return evidence_id, profile_suggestion_id
+        except Exception:
+            conn.rollback()
+            raise
 
 
 def submit_training_task(
@@ -78,14 +143,25 @@ def submit_training_task(
         )
 
     # 3. 确定题分
-    score_result = score_training_submission(
-        {"questions": questions},
-        answers,
-        used_hints=used_hints,
-    )
+    try:
+        score_result = score_training_submission(
+            {"questions": questions},
+            answers,
+            used_hints=used_hints,
+        )
+    except UnsupportedQuestionTypeError as exc:
+        raise TrainingSubmissionError(
+            "INVALID_TASK_CONTENT",
+            f"训练任务 {task_id} 包含 MVP 不支持的题型。",
+            {
+                "task_id": task_id,
+                "question_id": exc.question_id,
+                "question_type": exc.question_type,
+            },
+        ) from exc
 
     # 4. 写入学习证据
-    evidence_id = record_training_submission_evidence(
+    evidence_id, profile_suggestion_id = _write_submission_artifacts_atomically(
         database_path,
         user_id=user_id,
         session_id=session_id,
@@ -96,15 +172,7 @@ def submit_training_task(
         used_hints=used_hints,
     )
 
-    # 5. 写入画像更新建议
-    profile_suggestion_id = propose_profile_update_from_score(
-        database_path,
-        user_id=user_id,
-        evidence_id=evidence_id,
-        score_result=score_result,
-    )
-
-    # 6. 生成 agent_feedback（确定性模板）
+    # 5. 生成 agent_feedback（确定性模板）
     accuracy = score_result.get("accuracy", 0.0)
     if accuracy >= 1.0:
         agent_feedback = "全部正确！继续保持，可以尝试更高难度的练习。"

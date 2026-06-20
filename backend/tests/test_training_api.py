@@ -8,7 +8,7 @@ from fastapi.testclient import TestClient
 from app.config import Settings
 from app.database import init_database
 from app.main import create_app
-from app.repositories.training import get_generated_task
+from app.repositories.training import create_learning_evidence, get_generated_task
 from app.repositories.users import create_user
 from factories import create_multiple_choice_task, create_user_with_session
 from temp_paths import temp_db_path
@@ -146,6 +146,23 @@ class TestTrainingResultAPI:
         data = response.json()
         assert data["task"]["task_id"] == tid
         assert data["latest_submission"] is None
+
+    def test_non_training_answer_evidence_is_not_latest_submission(self, client, db_path):
+        uid, sid, tid, _ = _create_user_and_task(db_path)
+        create_learning_evidence(
+            db_path,
+            user_id=uid,
+            session_id=sid,
+            task_id=tid,
+            evidence_type="GRADING_RESULT",
+            payload={"score": {"total": 999, "correct": 999, "accuracy": 1.0, "passed": True}},
+        )
+        response = client.get(
+            f"/api/training/tasks/{tid}/result",
+            headers={"X-LingoForge-User-Id": str(uid)},
+        )
+        assert response.status_code == 200
+        assert response.json()["latest_submission"] is None
 
     def test_with_submission(self, client, db_path):
         uid, _, tid, _ = _create_user_and_task(db_path)
