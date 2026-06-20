@@ -19,15 +19,33 @@ def create_vocabulary_item(
     database_path: str | Path,
     text: str,
     meaning_zh: str | None = None,
+    part_of_speech: str | None = None,
     tags: list[str] | None = None,
     source_type: str = "CET6_VOCAB",
 ) -> int:
     """创建词汇项，返回新记录 ID。"""
     return execute(
         database_path,
-        "INSERT INTO vocabulary_items (text, meaning_zh, tags, source_type) VALUES (?, ?, ?, ?)",
-        (text, meaning_zh, to_json_text(tags or []), source_type),
+        "INSERT INTO vocabulary_items (text, meaning_zh, part_of_speech, tags, source_type) VALUES (?, ?, ?, ?, ?)",
+        (text, meaning_zh, part_of_speech, to_json_text(tags or []), source_type),
     )
+
+
+def get_vocabulary_by_text(database_path: str | Path, text: str) -> dict[str, Any] | None:
+    """按文本查找词汇项（用于去重）。"""
+    row = fetch_one(database_path, "SELECT * FROM vocabulary_items WHERE text = ?", (text,))
+    if row is None:
+        return None
+    row["tags"] = from_json_text(row.get("tags"), [])
+    return row
+
+
+def list_all_vocabulary(database_path: str | Path) -> list[dict[str, Any]]:
+    """列出所有词汇项。"""
+    rows = fetch_all(database_path, "SELECT * FROM vocabulary_items ORDER BY id ASC")
+    for row in rows:
+        row["tags"] = from_json_text(row.get("tags"), [])
+    return rows
 
 
 def get_vocabulary_item(database_path: str | Path, item_id: int) -> dict[str, Any] | None:
