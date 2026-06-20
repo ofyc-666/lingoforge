@@ -11,7 +11,6 @@ from app.agent.models import RuntimeContext
 from app.llm.types import LLMToolCall, LLMToolSpec
 from app.repositories.logs import create_tool_call_log
 from app.repositories.users import get_latest_profile, get_latest_user_goal, get_user
-from app.services.candidate_vocab import get_candidate_event_detail
 from app.services.learning_history import analyze_learning_history
 
 
@@ -119,100 +118,6 @@ def get_analyze_learning_history_tool_spec() -> LLMToolSpec:
             "additionalProperties": False,
         },
     )
-
-
-def get_candidate_vocabulary_tool_spec() -> LLMToolSpec:
-    return LLMToolSpec(
-        name="get_candidate_vocabulary",
-        description=(
-            "读取 Runtime 绑定用户的候选词事件详情。"
-            "参数中不得包含 user_id、session_id 或权限字段；"
-            "候选词列表由确定性服务生成，本工具只读取已生成的事件。"
-        ),
-        parameters={
-            "type": "object",
-            "properties": {
-                "candidate_event_id": {
-                    "type": "integer",
-                    "description": "候选词事件 ID。",
-                },
-                "include_history_summary": {
-                    "type": "boolean",
-                    "description": "是否包含历史摘要，默认 true。",
-                },
-            },
-            "required": ["candidate_event_id"],
-            "additionalProperties": False,
-        },
-    )
-
-
-def _validate_get_candidate_vocabulary_arguments(
-    arguments: dict[str, Any],
-) -> tuple[dict[str, Any] | None, str | None]:
-    if not isinstance(arguments, dict):
-        return None, "INVALID_TOOL_ARGUMENTS"
-    if IDENTITY_ARGUMENTS.intersection(arguments):
-        return None, "IDENTITY_ARGUMENT_FORBIDDEN"
-    allowed = {"candidate_event_id", "include_history_summary"}
-    if any(key not in allowed for key in arguments):
-        return None, "INVALID_TOOL_ARGUMENTS"
-    event_id = arguments.get("candidate_event_id")
-    if not isinstance(event_id, int) or event_id <= 0:
-        return None, "INVALID_TOOL_ARGUMENTS"
-    include_history = arguments.get("include_history_summary", True)
-    if not isinstance(include_history, bool):
-        return None, "INVALID_TOOL_ARGUMENTS"
-    return {
-        "candidate_event_id": event_id,
-        "include_history_summary": include_history,
-    }, None
-
-
-def build_get_candidate_vocabulary_handler(database_path: str | Path) -> ToolHandler:
-    def handler(context: RuntimeContext, arguments: dict[str, Any]) -> dict[str, Any]:
-        sanitized, error_code = _validate_get_candidate_vocabulary_arguments(arguments)
-        if error_code is not None or sanitized is None:
-            raise ToolArgumentError(error_code or "INVALID_TOOL_ARGUMENTS")
-
-        event_id = sanitized["candidate_event_id"]
-        event = get_candidate_event_detail(database_path, event_id, context.user_id)
-        if event is None:
-            raise ToolArgumentError("CANDIDATE_EVENT_NOT_FOUND")
-
-        result: dict[str, Any] = {
-            "bound_user_id": context.user_id,
-            "bound_session_id": context.session_id,
-            "candidate_event_id": event_id,
-            "user_id": event.get("user_id"),
-            "workflow_stage": event.get("workflow_stage"),
-            "selection_reason": event.get("selection_reason"),
-            "candidate_items": event.get("candidate_items", []),
-            "total_candidates": len(event.get("candidate_items", [])),
-        }
-
-        if sanitized["include_history_summary"]:
-            history_summary = _build_history_summary(database_path, context.user_id)
-            result["history_summary"] = history_summary
-
-        result["source_refs"] = [
-            {"type": "candidate_vocabulary_event", "id": event_id},
-        ]
-        return result
-
-    return handler
-
-
-def _build_history_summary(database_path: str | Path, user_id: int) -> dict[str, Any]:
-    from app.repositories.base import fetch_all
-    rows = fetch_all(
-        database_path,
-        "SELECT learning_status, COUNT(*) as cnt FROM user_vocabulary_states WHERE user_id = ? GROUP BY learning_status",
-        (user_id,),
-    )
-    summary = {row["learning_status"]: row["cnt"] for row in rows}
-    summary["total_states"] = sum(summary.values())
-    return summary
 
 
 def _validate_get_user_profile_arguments(
@@ -389,7 +294,6 @@ def build_analyze_learning_history_handler(database_path: str | Path) -> ToolHan
 def create_default_tool_registry(database_path: str | Path) -> ToolRegistry:
     profile_spec = get_user_profile_tool_spec()
     history_spec = get_analyze_learning_history_tool_spec()
-    candidate_spec = get_candidate_vocabulary_tool_spec()
     return ToolRegistry({
         "get_user_profile": ToolDefinition(
             name=profile_spec.name,
@@ -402,12 +306,6 @@ def create_default_tool_registry(database_path: str | Path) -> ToolRegistry:
             description=history_spec.description,
             parameters=history_spec.parameters,
             handler=build_analyze_learning_history_handler(database_path),
-        ),
-        "get_candidate_vocabulary": ToolDefinition(
-            name=candidate_spec.name,
-            description=candidate_spec.description,
-            parameters=candidate_spec.parameters,
-            handler=build_get_candidate_vocabulary_handler(database_path),
         ),
     })
 

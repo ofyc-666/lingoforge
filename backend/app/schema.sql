@@ -43,7 +43,6 @@ CREATE TABLE IF NOT EXISTS vocabulary_items (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   text TEXT NOT NULL,
   meaning_zh TEXT,
-  part_of_speech TEXT,
   tags TEXT NOT NULL DEFAULT '[]',
   source_type TEXT NOT NULL,
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
@@ -197,81 +196,5 @@ CREATE TABLE IF NOT EXISTS agent_decision_logs (
   decision_json TEXT NOT NULL DEFAULT '{}',
   evidence_refs TEXT NOT NULL DEFAULT '[]',
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
-
--- ============================================================
--- 本轮新增：每日背词 + 自适应刷题闭环
--- ============================================================
-
-CREATE TABLE IF NOT EXISTS user_vocabulary_states (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  vocabulary_item_id INTEGER NOT NULL REFERENCES vocabulary_items(id) ON DELETE CASCADE,
-  learning_status TEXT NOT NULL DEFAULT 'NEW',
-  familiarity_level TEXT NOT NULL DEFAULT 'UNKNOWN',
-  first_seen_at TEXT,
-  last_reviewed_at TEXT,
-  last_success_at TEXT,
-  next_review_at TEXT,
-  correct_count INTEGER NOT NULL DEFAULT 0 CHECK (correct_count >= 0),
-  wrong_count INTEGER NOT NULL DEFAULT 0 CHECK (wrong_count >= 0),
-  context_error_count INTEGER NOT NULL DEFAULT 0 CHECK (context_error_count >= 0),
-  consecutive_correct INTEGER NOT NULL DEFAULT 0 CHECK (consecutive_correct >= 0),
-  consecutive_wrong INTEGER NOT NULL DEFAULT 0 CHECK (consecutive_wrong >= 0),
-  prompt_dependency TEXT NOT NULL DEFAULT 'LOW',
-  evidence_refs TEXT NOT NULL DEFAULT '[]',
-  algorithm_version TEXT NOT NULL DEFAULT 'mvp-v1',
-  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  UNIQUE(user_id, vocabulary_item_id)
-);
-
-CREATE TABLE IF NOT EXISTS vocabulary_review_events (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  session_id INTEGER REFERENCES training_sessions(id) ON DELETE SET NULL,
-  plan_id INTEGER,
-  vocabulary_item_id INTEGER NOT NULL REFERENCES vocabulary_items(id) ON DELETE CASCADE,
-  event_type TEXT NOT NULL,
-  answer_json TEXT NOT NULL DEFAULT '{}',
-  is_correct INTEGER,
-  self_rating TEXT,
-  used_hint INTEGER NOT NULL DEFAULT 0,
-  time_spent_seconds INTEGER,
-  evidence_refs TEXT NOT NULL DEFAULT '[]',
-  metadata_json TEXT NOT NULL DEFAULT '{}',
-  occurred_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE IF NOT EXISTS daily_learning_plans (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  session_id INTEGER REFERENCES training_sessions(id) ON DELETE SET NULL,
-  plan_date TEXT NOT NULL,
-  status TEXT NOT NULL DEFAULT 'PLANNED',
-  practice_mode TEXT NOT NULL DEFAULT 'TARGETED_PRACTICE',
-  target_abilities TEXT NOT NULL DEFAULT '[]',
-  selected_skills TEXT NOT NULL DEFAULT '[]',
-  difficulty_params TEXT NOT NULL DEFAULT '{}',
-  hint_strategy TEXT NOT NULL DEFAULT '{}',
-  rationale TEXT NOT NULL DEFAULT '',
-  estimated_minutes INTEGER,
-  candidate_event_id INTEGER REFERENCES candidate_vocabulary_events(id),
-  agent_decision_log_id INTEGER REFERENCES agent_decision_logs(id),
-  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE UNIQUE INDEX IF NOT EXISTS idx_daily_plans_user_date
-  ON daily_learning_plans(user_id, plan_date);
-
-CREATE TABLE IF NOT EXISTS daily_plan_vocabulary_items (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  plan_id INTEGER NOT NULL REFERENCES daily_learning_plans(id) ON DELETE CASCADE,
-  vocabulary_item_id INTEGER NOT NULL REFERENCES vocabulary_items(id) ON DELETE CASCADE,
-  word_role TEXT NOT NULL,
-  item_order INTEGER NOT NULL DEFAULT 0,
-  selection_reason TEXT NOT NULL DEFAULT '',
-  UNIQUE(plan_id, vocabulary_item_id)
 );
 

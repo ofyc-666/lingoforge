@@ -10,7 +10,6 @@
 difficulty_params、generation_rules、quality_requirements、observable_evidence、
 common_error_types。
 
-综合模拟（COMPREHENSIVE_SIMULATION）是多个 Skill 的组合模式，不是第五个 Skill。
 Skill 不访问数据库、不判分、不写画像。
 """
 
@@ -29,7 +28,6 @@ SKILL_CATALOG: list[dict[str, Any]] = [
         "target_ability": "VOCABULARY_CONTEXT",
         "supported_task_types": [
             "LOW_PRESSURE_LEARNING", "SHORT_TRAINING",
-            "TARGETED_PRACTICE", "COMPREHENSIVE_SIMULATION",
         ],
         "summary": "训练用户根据英文上下文判断词义，优先观察上下文线索和干扰项排除理由。",
         "estimated_tokens": 280,
@@ -41,7 +39,6 @@ SKILL_CATALOG: list[dict[str, Any]] = [
         "target_ability": "SENTENCE_LOGIC",
         "supported_task_types": [
             "LOW_PRESSURE_LEARNING", "SHORT_TRAINING",
-            "TARGETED_PRACTICE", "COMPREHENSIVE_SIMULATION",
         ],
         "summary": "训练理解长句主干、修饰成分、指代关系和句间逻辑（转折/因果/递进/对比）。",
         "estimated_tokens": 300,
@@ -53,7 +50,6 @@ SKILL_CATALOG: list[dict[str, Any]] = [
         "target_ability": "PARAPHRASE_LOCATION",
         "supported_task_types": [
             "LOW_PRESSURE_LEARNING", "SHORT_TRAINING",
-            "TARGETED_PRACTICE", "COMPREHENSIVE_SIMULATION",
         ],
         "summary": "训练题干/选项与原文之间的同义替换识别和原文定位能力。",
         "estimated_tokens": 310,
@@ -65,7 +61,6 @@ SKILL_CATALOG: list[dict[str, Any]] = [
         "target_ability": "DISTRACTOR_JUDGEMENT",
         "supported_task_types": [
             "LOW_PRESSURE_LEARNING", "SHORT_TRAINING",
-            "TARGETED_PRACTICE", "COMPREHENSIVE_SIMULATION",
         ],
         "summary": "训练识别 CET-6 阅读常见干扰项模式（过度推断/偷换概念/范围变化/无中生有）。",
         "estimated_tokens": 320,
@@ -129,7 +124,6 @@ def _vocabulary_context_skill() -> dict[str, Any]:
         "target_ability": "VOCABULARY_CONTEXT",
         "supported_task_types": [
             "LOW_PRESSURE_LEARNING", "SHORT_TRAINING",
-            "TARGETED_PRACTICE", "COMPREHENSIVE_SIMULATION",
         ],
         "applicable_conditions": {
             "profile_indicators": [
@@ -190,7 +184,6 @@ def _sentence_logic_skill() -> dict[str, Any]:
         "target_ability": "SENTENCE_LOGIC",
         "supported_task_types": [
             "LOW_PRESSURE_LEARNING", "SHORT_TRAINING",
-            "TARGETED_PRACTICE", "COMPREHENSIVE_SIMULATION",
         ],
         "applicable_conditions": {
             "profile_indicators": [
@@ -251,7 +244,6 @@ def _paraphrase_location_skill() -> dict[str, Any]:
         "target_ability": "PARAPHRASE_LOCATION",
         "supported_task_types": [
             "LOW_PRESSURE_LEARNING", "SHORT_TRAINING",
-            "TARGETED_PRACTICE", "COMPREHENSIVE_SIMULATION",
         ],
         "applicable_conditions": {
             "profile_indicators": [
@@ -311,7 +303,6 @@ def _distractor_judgement_skill() -> dict[str, Any]:
         "target_ability": "DISTRACTOR_JUDGEMENT",
         "supported_task_types": [
             "LOW_PRESSURE_LEARNING", "SHORT_TRAINING",
-            "TARGETED_PRACTICE", "COMPREHENSIVE_SIMULATION",
         ],
         "applicable_conditions": {
             "profile_indicators": [

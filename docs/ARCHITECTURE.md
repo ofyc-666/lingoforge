@@ -13,7 +13,7 @@
 | 课程要求 | 架构响应 |
 |---|---|
 | 单一用途自定义 Agent | 实现一个 CET-6 词汇与阅读学习 Agent |
-| 至少两个可调用工具 | LLM 可调用工具保留 `get_user_profile`、`get_candidate_vocabulary`、`submit_profile_update_suggestion` |
+| 至少两个可调用工具 | LLM 可调用工具保留 `get_user_profile`、`submit_profile_update_suggestion` |
 | 标准 Function Calling 或 MCP | 当前采用原生模型 Function Calling，不强制使用 MCP |
 | AI 生成主要代码和样板 | 后续由 AI 生成 FastAPI、Vue、SQLite、工具参数模型和接口逻辑 |
 | 人工负责核心设计 | 人工确认架构选择、核心 Prompt、工具契约和 Agent 编排循环 |
@@ -198,7 +198,6 @@ Agent 不得跳过判分、记录、校验、隔离检测和副线边界。
 LLM Function Calling 工具是 Agent 可以自主请求调用的本地接口。MVP 保留：
 
 - `get_user_profile`；
-- `get_candidate_vocabulary`；
 - `submit_profile_update_suggestion`。
 
 工具必须有明确输入、输出和失败处理。工具返回结构化结果，Agent 必须读取工具结果再继续决策。

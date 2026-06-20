@@ -1,12 +1,4 @@
-"""Agent 最终输出的最小校验。
-
-包括 DAILY_LEARNING_PLAN 的专项校验：
-  - 所有词属于候选池
-  - 同一个词不能出现在多个角色
-  - Skill 真实存在
-  - rationale 和 decision_basis 非空
-  - 不允许直接写画像
-"""
+"""Agent 最终输出的最小校验。"""
 
 from __future__ import annotations
 
@@ -14,7 +6,6 @@ import json
 from typing import Any
 
 from app.agent.models import DecisionValidationResult, RuntimeContext
-from app.agent.skills import skill_exists
 
 
 class DecisionValidator:
@@ -72,15 +63,6 @@ class DecisionValidator:
         if parsed.get("direct_profile_write") is True:
             errors.append("DIRECT_PROFILE_WRITE_FORBIDDEN")
 
-        # DAILY_LEARNING_PLAN 专项校验
-        if parsed.get("decision_type") == "DAILY_LEARNING_PLAN":
-            _validate_daily_plan_fields(parsed, errors)
-        if context.workflow_stage == "DAILY_PLAN":
-            _validate_daily_plan_context(parsed, errors)
-        if context.workflow_stage == "ISOLATED_TEST":
-            if parsed.get("decision_type") in ("DAILY_LEARNING_PLAN", "PLAN"):
-                errors.append("DAILY_PLAN_FORBIDDEN_IN_ISOLATION")
-
         normalized = self._normalize(parsed, context, tool_results)
         if errors:
             return normalized, DecisionValidationResult(
@@ -108,55 +90,3 @@ class DecisionValidator:
             normalized["decision_basis"] = []
         return normalized
 
-
-def _validate_daily_plan_fields(decision: dict[str, Any], errors: list[str]) -> None:
-    """校验 DAILY_LEARNING_PLAN 特有字段。"""
-    vocab_plan = decision.get("daily_vocabulary_plan", {})
-    if not isinstance(vocab_plan, dict):
-        errors.append("MISSING_DAILY_VOCABULARY_PLAN")
-        return
-
-    # rationale 非空
-    if not vocab_plan.get("selection_rationale", "").strip():
-        errors.append("MISSING_RATIONALE")
-
-    # decision_basis 非空
-    if not decision.get("decision_basis"):
-        errors.append("MISSING_DECISION_BASIS")
-
-    # next_step 合理
-    next_step = decision.get("next_step", "")
-    if next_step not in ("START_VOCABULARY", "START_PRACTICE", "DONE"):
-        errors.append(f"INVALID_NEXT_STEP:{next_step}")
-
-    # 不允许直接写画像
-    if decision.get("direct_profile_write") is True or decision.get("profile_update"):
-        errors.append("DIRECT_PROFILE_WRITE_FORBIDDEN")
-
-    # Skill 真实存在
-    selected_skills = decision.get("selected_skills", [])
-    if isinstance(selected_skills, list):
-        for skill in selected_skills:
-            if not isinstance(skill, dict):
-                errors.append("INVALID_SKILL_ENTRY_TYPE")
-                continue
-            sid = skill.get("skill_id", "")
-            if not skill_exists(sid):
-                errors.append(f"SKILL_NOT_FOUND:{sid}")
-
-    # Practice mode 校验
-    practice_mode = decision.get("practice_mode", "")
-    if not practice_mode:
-        errors.append("MISSING_PRACTICE_MODE")
-
-
-def _validate_daily_plan_context(decision: dict[str, Any], errors: list[str]) -> None:
-    """DAILY_PLAN 阶段的 Context 级校验。"""
-    # 不允许直接写画像
-    if decision.get("direct_profile_write") is True:
-        errors.append("DIRECT_PROFILE_WRITE_FORBIDDEN")
-
-    # 必须包含 daily_vocabulary_plan
-    if decision.get("decision_type") == "DAILY_LEARNING_PLAN":
-        if "daily_vocabulary_plan" not in decision:
-            errors.append("MISSING_DAILY_VOCABULARY_PLAN")

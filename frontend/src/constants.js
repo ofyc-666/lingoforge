@@ -33,8 +33,6 @@ export const TASK_TYPE_LABEL = {
   SHORT_TRAINING: '短训练',
   VOCABULARY_LEARNING: '词汇学习',
   VOCABULARY_REVIEW: '词汇复习',
-  TARGETED_PRACTICE: '针对性训练',
-  COMPREHENSIVE_SIMULATION: '综合模拟',
 }
 
 // ---- Workflow 阶段映射 ----
@@ -45,36 +43,4 @@ export const STAGE_LABEL = {
   SECOND_PLAN: '第二次计划',
   SHORT_TRAINING: '短训练',
   ISOLATED_TEST: '阶段检测',
-  DAILY_PLAN: '每日计划',
-}
-
-// ---- 练习模式映射 ----
-export const PRACTICE_MODE_LABEL = {
-  TARGETED_PRACTICE: '针对性训练',
-  COMPREHENSIVE_SIMULATION: '综合模拟',
-}
-
-// ---- 计划状态映射 ----
-export const PLAN_STATUS_LABEL = {
-  PLANNED: '已规划',
-  VOCABULARY_IN_PROGRESS: '背词中',
-  VOCABULARY_COMPLETED: '背词完成',
-  PRACTICE_IN_PROGRESS: '刷题中',
-  COMPLETED: '已完成',
-}
-
-// ---- 词汇学习状态 ----
-export const LEARNING_STATUS_LABEL = {
-  NEW: '新词',
-  LEARNING: '学习中',
-  REVIEWING: '复习中',
-  MASTERED: '已掌握',
-  WEAK: '薄弱',
-}
-
-// ---- 自评结果 ----
-export const SELF_RATING_LABEL = {
-  KNOWN: '认识',
-  FUZZY: '模糊',
-  UNKNOWN: '不认识',
 }

@@ -156,26 +156,4 @@ export function submitIsolatedTest(attemptId, data) {
   return request('POST', `/api/isolated-tests/attempts/${attemptId}/submit`, data)
 }
 
-// ---- 每日计划（新接口） ----
-
-export function generateDailyPlan(data = {}) {
-  return request('POST', '/api/daily-plans/generate', data)
-}
-
-export function getTodayPlan() {
-  return request('GET', '/api/daily-plans/today')
-}
-
-export function createReviewEvents(data) {
-  return request('POST', '/api/vocabulary/review-events', data)
-}
-
-export function completeVocabulary(planId) {
-  return request('POST', `/api/daily-plans/${planId}/vocabulary/complete`)
-}
-
-export function startPractice(planId, data) {
-  return request('POST', `/api/daily-plans/${planId}/practice/start`, data)
-}
-
 export { API_BASE_URL }

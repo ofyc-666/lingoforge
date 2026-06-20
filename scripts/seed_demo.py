@@ -22,7 +22,7 @@ from app.repositories.sidequest import create_sidequest_run, create_sidequest_si
 from app.repositories.training import create_generated_task, create_training_session
 from app.repositories.users import create_profile_snapshot, create_user, save_user_goal
 from app.repositories.vocabulary import create_vocabulary_item, get_vocabulary_by_text
-from app.services.vocab_import import seed_cet6_vocabulary
+
 
 
 def seed(database_path: str) -> None:
@@ -84,11 +84,7 @@ def seed(database_path: str) -> None:
         )
         print(f"画像快照: snapshot_id={snapshot_id}")
 
-    # 4. CET-6 词表演示子集（幂等导入）
-    cet6_result = seed_cet6_vocabulary(database_path)
-    print(f"CET-6 词汇导入: 新增 {cet6_result['created']}, 跳过 {cet6_result['skipped']}")
-
-    # 5. 演示基础词汇（与旧 seed 兼容，幂等）
+    # 4. 演示基础词汇（与旧 seed 兼容，幂等）
     demo_vocab_items = [
         ("climate", "气候", "CET6_VOCAB"),
         ("ecosystem", "生态系统", "CET6_VOCAB"),
@@ -322,9 +318,8 @@ def seed(database_path: str) -> None:
     print("===== Demo 数据摘要 =====")
     print(f"  user_id:    {user_id}")
     print(f"  session_id: {session_id}")
-    cet6_count = len([v for v in demo_vocab_items]) + cet6_result['created']
-    print(f"  词汇数:     ~{cet6_count}")
-    print(f"  CET-6 导入: 新增 {cet6_result['created']}, 跳过 {cet6_result['skipped']}")
+    vocab_count = len(demo_vocab_items)
+    print(f"  词汇数:     {vocab_count}")
     print("=========================")
     print("Demo 数据创建完成，可用于本地开发和测试。")
 

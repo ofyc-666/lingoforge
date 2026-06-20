@@ -3,7 +3,6 @@
 确定性校验生成训练任务的内容结构和答案有效性。
 不调用 LLM，不把模型自称"校验通过"当成真实校验。
 
-扩展支持 TARGETED_PRACTICE 和 COMPREHENSIVE_SIMULATION 专项校验。
 """
 
 from __future__ import annotations
@@ -11,7 +10,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from app.constants import PracticeMode, is_valid_ability
+from app.constants import is_valid_ability
 from app.repositories.training import create_task_validation
 
 
@@ -40,8 +39,6 @@ def validate_training_task_content(content: dict[str, Any]) -> dict[str, Any]:
 
     # 检查练习模式
     practice_mode = content.get("practice_mode", "")
-    if practice_mode:
-        _validate_practice_mode_specific(content, practice_mode, error_codes, error_details)
 
     if not content.get("title") and not practice_mode:
         error_codes.append("MISSING_TITLE")
@@ -93,32 +90,6 @@ def validate_training_task_content(content: dict[str, Any]) -> dict[str, Any]:
     return _build_result(error_codes, error_details)
 
 
-def _validate_practice_mode_specific(
-    content: dict[str, Any],
-    practice_mode: str,
-    error_codes: list[str],
-    error_details: dict[str, Any],
-) -> None:
-    """按练习模式校验任务结构。"""
-    selected_skills = content.get("selected_skills", [])
-    target_abilities = content.get("target_abilities", [])
-
-    if practice_mode == PracticeMode.TARGETED_PRACTICE:
-        # 1-2 Skill
-        if len(selected_skills) < 1 or len(selected_skills) > 2:
-            error_codes.append("TARGETED_PRACTICE_SKILL_COUNT")
-        # 至少 1 个目标能力
-        if len(set(target_abilities)) < 1:
-            error_codes.append("MISSING_TARGET_ABILITY")
-    elif practice_mode == PracticeMode.COMPREHENSIVE_SIMULATION:
-        # 2-4 Skill
-        if len(selected_skills) < 2 or len(selected_skills) > 4:
-            error_codes.append("SIMULATION_SKILL_COUNT")
-        # 至少覆盖两个能力
-        if len(set(target_abilities)) < 2:
-            error_codes.append("SIMULATION_LESS_THAN_TWO_ABILITIES")
-
-
 def _validate_practice_questions(
     content: dict[str, Any],
     questions: list[dict[str, Any]],
@@ -127,8 +98,6 @@ def _validate_practice_questions(
     error_details: dict[str, Any],
 ) -> None:
     """按练习模式校验题目内容。"""
-    target_abilities = set(content.get("target_abilities", []))
-    selected_skills = content.get("selected_skills", [])
 
     for i, q in enumerate(questions):
         prefix = f"questions[{i}]"
@@ -141,12 +110,6 @@ def _validate_practice_questions(
             if not q.get("target_ability"):
                 error_codes.append("MISSING_TARGET_ABILITY_IN_QUESTION")
                 error_details[prefix] = "缺少 target_ability"
-
-    # COMPREHENSIVE_SIMULATION: 不能全部题属于同一能力
-    if practice_mode == PracticeMode.COMPREHENSIVE_SIMULATION:
-        question_abilities = {q.get("target_ability", "") for q in questions}
-        if len(question_abilities) < 2:
-            error_codes.append("ALL_QUESTIONS_SAME_ABILITY")
 
 
 def _build_result(error_codes: list[str], error_details: dict[str, Any]) -> dict[str, Any]:

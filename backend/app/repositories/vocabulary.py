@@ -19,15 +19,14 @@ def create_vocabulary_item(
     database_path: str | Path,
     text: str,
     meaning_zh: str | None = None,
-    part_of_speech: str | None = None,
     tags: list[str] | None = None,
     source_type: str = "CET6_VOCAB",
 ) -> int:
     """创建词汇项，返回新记录 ID。"""
     return execute(
         database_path,
-        "INSERT INTO vocabulary_items (text, meaning_zh, part_of_speech, tags, source_type) VALUES (?, ?, ?, ?, ?)",
-        (text, meaning_zh, part_of_speech, to_json_text(tags or []), source_type),
+        "INSERT INTO vocabulary_items (text, meaning_zh, tags, source_type) VALUES (?, ?, ?, ?)",
+        (text, meaning_zh, to_json_text(tags or []), source_type),
     )
 
 

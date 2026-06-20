@@ -3,12 +3,9 @@ import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import {
   getProfileSummary,
-  generateDailyPlan,
-  getTodayPlan,
   listTrainingSessions,
-  setSessionId,
 } from '../api/index.js'
-import { ABILITY_LABEL, PRACTICE_MODE_LABEL, PLAN_STATUS_LABEL, LEARNING_STATUS_LABEL } from '../constants.js'
+import { STAGE_LABEL } from '../constants.js'
 import LoadingState from '../components/LoadingState.vue'
 import ErrorState from '../components/ErrorState.vue'
 import EmptyState from '../components/EmptyState.vue'
@@ -16,20 +13,12 @@ import StatusMessage from '../components/StatusMessage.vue'
 
 const router = useRouter()
 
-// 状态
 const loading = ref(true)
 const error = ref('')
 const errorCode = ref('')
 
-// 用户目标与画像
 const profileSummary = ref(null)
 const goal = ref(null)
-
-// 今日计划
-const todayPlan = ref(null)
-const planLoading = ref(false)
-
-// 最近训练会话
 const recentSessions = ref([])
 
 async function loadData() {
@@ -44,38 +33,16 @@ async function loadData() {
     goal.value = summary?.latest_goal || null
 
     if (sessions?.sessions?.length > 0) {
-      recentSessions.value = sessions.sessions.slice(0, 3).map((s) => ({
+      recentSessions.value = sessions.sessions.slice(0, 5).map((s) => ({
         ...s,
-        stageLabel: s.stage || '',
+        stageLabel: STAGE_LABEL[s.stage] || s.stage,
       }))
-    }
-
-    // 尝试获取今日计划
-    try {
-      const plan = await getTodayPlan()
-      todayPlan.value = plan
-    } catch (_) {
-      todayPlan.value = null
     }
   } catch (e) {
     error.value = e.message || '加载失败'
     errorCode.value = e.code || ''
   } finally {
     loading.value = false
-  }
-}
-
-async function handleGeneratePlan() {
-  planLoading.value = true
-  try {
-    await generateDailyPlan({ regenerate: false })
-    const plan = await getTodayPlan()
-    todayPlan.value = plan
-  } catch (e) {
-    error.value = e.message || '生成计划失败'
-    errorCode.value = e.code || ''
-  } finally {
-    planLoading.value = false
   }
 }
 
@@ -95,6 +62,10 @@ function goToProfile() {
   router.push('/profile')
 }
 
+function goToHistory() {
+  router.push('/history')
+}
+
 const hasGoal = () => {
   if (!goal.value) return false
   const g = goal.value
@@ -105,13 +76,12 @@ onMounted(loadData)
 </script>
 
 <template>
-  <div class="daily-page">
-    <h1 class="page-title">今日学习</h1>
+  <div class="home-page">
+    <h1 class="page-title">LingoForge 学习首页</h1>
 
     <LoadingState v-if="loading" message="正在加载学习数据..." />
 
     <template v-else>
-      <!-- 错误提示 -->
       <StatusMessage
         v-if="error"
         type="warning"
@@ -119,7 +89,7 @@ onMounted(loadData)
         style="margin-bottom: 20px;"
       />
 
-      <!-- 用户目标摘要卡片 -->
+      <!-- CET-6 目标摘要 -->
       <section class="goal-card card" v-if="hasGoal()">
         <div class="card-header">
           <h2>🎯 学习目标</h2>
@@ -153,89 +123,25 @@ onMounted(loadData)
         <EmptyState
           icon="📋"
           title="尚未设置学习目标"
-          description="设置目标后，Agent 将为你定制学习计划。"
+          description="设置 CET-6 目标后，Agent 将根据你的画像定制训练。"
         />
         <div style="text-align: center; padding-bottom: 16px;">
           <button class="btn-primary" @click="goToProfile">设置目标</button>
         </div>
       </section>
 
-      <!-- 今日计划区域 -->
+      <!-- 推荐入口 -->
       <section class="card" style="margin-top: 20px;">
-        <div class="card-header">
-          <h2>📅 今日学习计划</h2>
-          <button
-            v-if="!todayPlan"
-            class="btn-primary btn-sm"
-            :disabled="planLoading"
-            @click="handleGeneratePlan"
-          >
-            {{ planLoading ? '生成中...' : '生成今日计划' }}
-          </button>
-        </div>
-
-        <template v-if="todayPlan">
-          <div class="plan-summary">
-            <div class="plan-stat">
-              <span class="plan-stat-value">{{ PLAN_STATUS_LABEL[todayPlan.status] || todayPlan.status }}</span>
-              <span class="plan-stat-label">状态</span>
-            </div>
-            <div class="plan-stat">
-              <span class="plan-stat-value">{{ PRACTICE_MODE_LABEL[todayPlan.practice_mode] || todayPlan.practice_mode }}</span>
-              <span class="plan-stat-label">练习模式</span>
-            </div>
-            <div class="plan-stat">
-              <span class="plan-stat-value">{{ todayPlan.estimated_minutes || '-' }} 分钟</span>
-              <span class="plan-stat-label">预计时长</span>
-            </div>
-            <div class="plan-stat">
-              <span class="plan-stat-value">{{ todayPlan.vocabulary_items?.length || 0 }} 词</span>
-              <span class="plan-stat-label">今日词汇</span>
-            </div>
-          </div>
-
-          <div class="plan-rationale" v-if="todayPlan.rationale">
-            <span class="rationale-label">推荐理由：</span>
-            {{ todayPlan.rationale }}
-          </div>
-
-          <!-- 词汇列表 -->
-          <div v-if="todayPlan.vocabulary_items?.length > 0" class="vocab-section">
-            <h3>今日词汇</h3>
-            <div class="vocab-grid">
-              <div
-                v-for="v in todayPlan.vocabulary_items"
-                :key="v.id"
-                class="vocab-chip"
-                :class="`status-${v.learning_status || 'NEW'}`"
-              >
-                <span class="vocab-word">{{ v.word }}</span>
-                <span class="vocab-meaning">{{ v.meaning_zh }}</span>
-                <span class="vocab-tag">{{ LEARNING_STATUS_LABEL[v.learning_status] || v.learning_status }}</span>
-              </div>
-            </div>
-          </div>
-
-          <div class="plan-actions" style="margin-top: 20px;">
-            <button class="btn-primary" @click="goToTraining">开始训练</button>
-          </div>
-        </template>
-
-        <EmptyState
-          v-else
-          icon="📅"
-          title="今日暂无学习计划"
-          description="点击上方按钮生成今日计划，Agent 将根据你的画像和词汇数据定制学习内容。"
-        />
+        <h2>📝 开始一次 Agent 训练</h2>
+        <p class="section-desc">
+          输入一段 CET-6 难度的英文材料，Agent 将读取你的学习画像和历史记录，
+          生成针对性训练题目。确定性程序负责判分、记录证据和画像建议。
+        </p>
+        <button class="btn-primary" @click="goToTraining">开始训练</button>
       </section>
 
-      <!-- 快捷入口卡片 -->
+      <!-- 快捷入口 -->
       <div class="quick-actions" style="margin-top: 20px;">
-        <section class="card quick-card" @click="goToTraining" role="button" tabindex="0">
-          <h3>📝 开始训练</h3>
-          <p>创建训练会话，输入英文材料或使用推荐内容开始 CET-6 训练。</p>
-        </section>
-
         <section class="card quick-card" @click="goToSidequest" role="button" tabindex="0">
           <h3>✈️ 机场任务</h3>
           <p>在机场购票场景中练习英语表达，结果用于后续练习参考。</p>
@@ -245,13 +151,18 @@ onMounted(loadData)
           <h3>🔒 阶段检测</h3>
           <p>在独立隔离环境中完成检测题，验证当前学习效果。</p>
         </section>
+
+        <section class="card quick-card" @click="goToProfile" role="button" tabindex="0">
+          <h3>👤 能力画像</h3>
+          <p>查看已确认画像、待审核的画像更新建议，编辑学习目标。</p>
+        </section>
       </div>
 
       <!-- 最近训练 -->
       <section class="card" style="margin-top: 20px;" v-if="recentSessions.length > 0">
         <div class="card-header">
           <h2>📊 最近训练</h2>
-          <button class="link-btn" @click="router.push('/history')">查看全部</button>
+          <button class="link-btn" @click="goToHistory">查看全部</button>
         </div>
         <div class="session-list">
           <div
@@ -259,7 +170,7 @@ onMounted(loadData)
             :key="s.id"
             class="session-row"
           >
-            <span class="session-stage">{{ s.stage || '-' }}</span>
+            <span class="session-stage">{{ s.stageLabel }}</span>
             <span class="session-status" :class="s.status === 'COMPLETED' ? 'done' : 'active'">
               {{ s.status === 'COMPLETED' ? '已完成' : '进行中' }}
             </span>
@@ -267,12 +178,19 @@ onMounted(loadData)
           </div>
         </div>
       </section>
+
+      <EmptyState
+        v-else
+        icon="📊"
+        title="暂无训练记录"
+        description="完成一次训练后，最近结果将在这里显示。"
+      />
     </template>
   </div>
 </template>
 
 <style scoped>
-.daily-page {
+.home-page {
   max-width: 960px;
 }
 
@@ -280,7 +198,6 @@ onMounted(loadData)
   margin-bottom: 24px;
 }
 
-/* Card base */
 .card {
   background: var(--color-surface);
   border: 1px solid var(--color-border);
@@ -295,7 +212,13 @@ onMounted(loadData)
   margin-bottom: 16px;
 }
 
-/* Goal grid */
+.section-desc {
+  color: var(--color-text-secondary);
+  font-size: 0.9rem;
+  line-height: 1.7;
+  margin: 8px 0 16px;
+}
+
 .goal-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
@@ -320,92 +243,6 @@ onMounted(loadData)
   color: var(--color-text);
 }
 
-/* Plan summary */
-.plan-summary {
-  display: flex;
-  gap: 24px;
-  margin-bottom: 16px;
-}
-
-.plan-stat {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.plan-stat-value {
-  font-size: 1.1rem;
-  font-weight: 700;
-  color: var(--color-primary);
-}
-
-.plan-stat-label {
-  font-size: 0.78rem;
-  color: var(--color-text-muted);
-}
-
-.plan-rationale {
-  padding: 12px 16px;
-  background: var(--color-bg);
-  border-radius: var(--radius-md);
-  font-size: 0.9rem;
-  color: var(--color-text-secondary);
-  line-height: 1.6;
-  margin-bottom: 16px;
-}
-
-.rationale-label {
-  font-weight: 600;
-  color: var(--color-text);
-}
-
-/* Vocab section */
-.vocab-section h3 {
-  font-size: 0.95rem;
-  margin-bottom: 12px;
-}
-
-.vocab-grid {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-}
-
-.vocab-chip {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 14px;
-  background: var(--color-bg);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  transition: border-color 0.15s;
-}
-
-.vocab-chip:hover {
-  border-color: var(--color-primary-light);
-}
-
-.vocab-word {
-  font-weight: 700;
-  color: var(--color-text);
-}
-
-.vocab-meaning {
-  font-size: 0.85rem;
-  color: var(--color-text-secondary);
-}
-
-.vocab-tag {
-  font-size: 0.7rem;
-  font-weight: 600;
-  padding: 2px 8px;
-  border-radius: 10px;
-  background: var(--color-primary-bg);
-  color: var(--color-primary);
-}
-
-/* Quick actions */
 .quick-actions {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -434,7 +271,6 @@ onMounted(loadData)
   line-height: 1.6;
 }
 
-/* Session list */
 .session-list {
   display: flex;
   flex-direction: column;
@@ -477,7 +313,6 @@ onMounted(loadData)
   color: var(--color-text-muted);
 }
 
-/* Buttons */
 .btn-primary {
   padding: 10px 28px;
   background: var(--color-primary);
@@ -492,11 +327,6 @@ onMounted(loadData)
   background: var(--color-primary-hover);
 }
 
-.btn-sm {
-  padding: 6px 16px;
-  font-size: 0.85rem;
-}
-
 .link-btn {
   background: none;
   color: var(--color-primary);
@@ -509,17 +339,12 @@ onMounted(loadData)
   text-decoration: underline;
 }
 
-/* Responsive */
 @media (max-width: 768px) {
   .goal-grid {
     grid-template-columns: repeat(2, 1fr);
   }
   .quick-actions {
     grid-template-columns: 1fr;
-  }
-  .plan-summary {
-    flex-wrap: wrap;
-    gap: 12px;
   }
 }
 </style>
